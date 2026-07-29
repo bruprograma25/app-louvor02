@@ -1,0 +1,219 @@
+.pagina-login {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  background: #0d0d0d;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 35px;
+  border-radius: 25px;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.logo-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 25px;
+}
+
+.logo-circulo {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 3px solid #b3131b;
+}
+
+.logo-circulo img {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+}
+
+.cabecalho-login {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.cabecalho-login h1 {
+  margin: 0;
+  color: #151515;
+  font-size: 38px;
+  line-height: 1.1;
+}
+
+.cabecalho-login h1 span {
+  display: block;
+  color: #b3131b;
+}
+
+.cabecalho-login p {
+  margin-top: 12px;
+  color: #777777;
+  line-height: 1.5;
+}
+
+.campo-login {
+  margin-bottom: 20px;
+}
+
+.campo-login label {
+  display: block;
+  margin-bottom: 7px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.input-login {
+  height: 55px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 15px;
+  border: 1px solid #dddddd;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.input-login:focus-within {
+  border-color: #b3131b;
+}
+
+.input-login span {
+  font-size: 18px;
+}
+
+.input-login input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  background: transparent;
+}
+
+.botao-olho {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.esqueceu-senha {
+  display: block;
+  margin: -5px 0 20px auto;
+  border: none;
+  background: transparent;
+  color: #b3131b;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.botao-entrar {
+  width: 100%;
+  height: 55px;
+  border: none;
+  border-radius: 12px;
+  background: #b3131b;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.botao-entrar:hover {
+  opacity: 0.9;
+}
+
+.botao-entrar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.separador-login {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 30px 0 20px;
+}
+
+.separador-login span {
+  flex: 1;
+  height: 1px;
+  background: #dddddd;
+}
+
+.separador-login p {
+  margin: 0;
+  color: #999999;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.botao-google {
+  width: 100%;
+  height: 52px;
+  border: 1px solid #dddddd;
+  border-radius: 12px;
+  background: white;
+  color: #333333;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.botao-google strong {
+  color: #4285f4;
+  font-size: 20px;
+}
+
+.rodape-login {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-top: 25px;
+  font-size: 13px;
+}
+
+.rodape-login p {
+  color: #777777;
+}
+
+.rodape-login button {
+  border: none;
+  background: transparent;
+  color: #b3131b;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .login-card {
+    padding: 25px 20px;
+  }
+
+  .cabecalho-login h1 {
+    font-size: 32px;
+  }
+}

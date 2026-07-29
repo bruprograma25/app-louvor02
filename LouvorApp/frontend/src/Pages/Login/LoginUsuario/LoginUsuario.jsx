@@ -1,18 +1,28 @@
 import { useState } from "react";
-import "./login.css";
+import "./LoginUsuario.css";
+import logoIgreja from "../../assets/images/logo-igreja.png";
 
-function Login() {
+function LoginUsuario() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
 
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
-  async function fazerLogin(event) {
+  async function entrar(event) {
     event.preventDefault();
 
-    if (!email || !senha) {
-      alert("Preencha o e-mail e a senha.");
+    if (carregando) {
+      return;
+    }
+
+    if (!email.trim()) {
+      alert("Digite seu e-mail.");
+      return;
+    }
+
+    if (!senha) {
+      alert("Digite sua senha.");
       return;
     }
 
@@ -29,7 +39,7 @@ function Login() {
           },
 
           body: JSON.stringify({
-            email: email,
+            email: email.trim().toLowerCase(),
             senha: senha,
           }),
         }
@@ -37,11 +47,15 @@ function Login() {
 
       const resultado = await resposta.json();
 
-      console.log("RESPOSTA DO FLASK:");
+      console.log("RESPOSTA DO LOGIN:");
       console.log(resultado);
 
       if (!resposta.ok) {
-        alert(resultado.erro || "Erro ao fazer login.");
+        alert(
+          resultado.erro ||
+            "Não foi possível fazer login."
+        );
+
         return;
       }
 
@@ -49,25 +63,30 @@ function Login() {
         `Bem-vindo, ${resultado.usuario.nome}!`
       );
 
-      // Salva o usuário no navegador
+      console.log(
+        "USUÁRIO LOGADO:",
+        resultado.usuario
+      );
+
+      // Por enquanto vamos apenas guardar
+      // os dados do usuário no navegador.
       localStorage.setItem(
         "usuario",
         JSON.stringify(resultado.usuario)
       );
 
-      console.log(
-        "Usuário logado:",
-        resultado.usuario
-      );
+      // Na próxima etapa vamos levar o usuário
+      // para o Dashboard.
 
     } catch (erro) {
       console.error(
-        "ERRO AO CONECTAR COM O FLASK:",
-        erro
+        "ERRO AO CONECTAR COM O FLASK:"
       );
 
+      console.error(erro);
+
       alert(
-        "Não foi possível conectar ao servidor. Verifique se o Flask está rodando."
+        "Não foi possível conectar ao servidor."
       );
 
     } finally {
@@ -78,46 +97,46 @@ function Login() {
   return (
     <main className="pagina-login">
 
-      {/* Fundo vermelho */}
-      <div className="fundo-vermelho"></div>
+      <section className="login-card">
 
-      <section className="login-container">
+        {/* LOGO */}
 
-        {/* Logo */}
         <div className="logo-area">
+
           <div className="logo-circulo">
 
             <img
-              src="/logo-igreja.png"
+              src={logoIgreja}
               alt="Logo da igreja"
             />
 
           </div>
+
         </div>
 
-        {/* Cabeçalho */}
+        {/* CABEÇALHO */}
+
         <div className="cabecalho-login">
 
           <h1>
-            Seja
-            <span>bem-vindo!</span>
+            Bem-vindo
+            <span>de volta!</span>
           </h1>
 
           <p>
-            Entre na sua conta e faça parte
+            Entre na sua conta e continue
             <br />
-            desta missão de fé e louvor.
+            sua missão de fé e louvor.
           </p>
 
         </div>
 
-        {/* Formulário */}
-        <form
-          className="formulario-login"
-          onSubmit={fazerLogin}
-        >
+        {/* FORMULÁRIO */}
 
-          {/* E-mail */}
+        <form onSubmit={entrar}>
+
+          {/* E-MAIL */}
+
           <div className="campo-login">
 
             <label htmlFor="email">
@@ -136,6 +155,7 @@ function Login() {
                 onChange={(event) =>
                   setEmail(event.target.value)
                 }
+                autoComplete="email"
                 required
               />
 
@@ -143,7 +163,8 @@ function Login() {
 
           </div>
 
-          {/* Senha */}
+          {/* SENHA */}
+
           <div className="campo-login">
 
             <label htmlFor="senha">
@@ -166,14 +187,17 @@ function Login() {
                 onChange={(event) =>
                   setSenha(event.target.value)
                 }
+                autoComplete="current-password"
                 required
               />
 
               <button
                 type="button"
-                className="mostrar-senha"
+                className="botao-olho"
                 onClick={() =>
-                  setMostrarSenha(!mostrarSenha)
+                  setMostrarSenha(
+                    (anterior) => !anterior
+                  )
                 }
               >
                 {mostrarSenha ? "◉" : "◌"}
@@ -183,20 +207,22 @@ function Login() {
 
           </div>
 
-          {/* Esqueci minha senha */}
+          {/* ESQUECEU SENHA */}
+
           <button
             type="button"
-            className="esqueci-senha"
+            className="esqueceu-senha"
             onClick={() =>
               alert(
-                "A recuperação de senha será criada em uma próxima etapa."
+                "A recuperação de senha será criada depois."
               )
             }
           >
             Esqueceu sua senha?
           </button>
 
-          {/* Botão entrar */}
+          {/* ENTRAR */}
+
           <button
             type="submit"
             className="botao-entrar"
@@ -215,7 +241,8 @@ function Login() {
 
         </form>
 
-        {/* Separador */}
+        {/* GOOGLE */}
+
         <div className="separador-login">
 
           <span></span>
@@ -226,24 +253,21 @@ function Login() {
 
         </div>
 
-        {/* Google */}
-        <div className="botoes-login">
+        <button
+          type="button"
+          className="botao-google"
+          onClick={() =>
+            alert(
+              "O login com Google será configurado na Etapa 10."
+            )
+          }
+        >
+          <strong>G</strong>
+          Continuar com Google
+        </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              alert(
-                "Login com Google será configurado em uma próxima etapa."
-              )
-            }
-          >
-            <strong>G</strong>
-            Google
-          </button>
+        {/* CADASTRO */}
 
-        </div>
-
-        {/* Cadastro */}
         <div className="rodape-login">
 
           <p>
@@ -254,7 +278,7 @@ function Login() {
             type="button"
             onClick={() =>
               alert(
-                "A troca para a tela de cadastro será configurada na próxima etapa."
+                "Depois vamos conectar este botão à tela de cadastro."
               )
             }
           >
@@ -269,4 +293,4 @@ function Login() {
   );
 }
 
-export default Login;
+export default LoginUsuario;

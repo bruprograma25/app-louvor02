@@ -1,0 +1,394 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  background: #080a0d;
+  color: white;
+}
+
+button {
+  font-family: Arial, sans-serif;
+}
+
+/* =========================
+   DASHBOARD
+========================= */
+
+.dashboard {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  background: #080a0d;
+  color: white;
+}
+
+/* =========================
+   MENU LATERAL
+========================= */
+
+.menu-lateral {
+  width: 250px;
+  min-height: 100vh;
+  background: #0d0f13;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 25px 15px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  border-right: 1px solid #1d2026;
+}
+
+.logo-menu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 10px 30px;
+}
+
+.logo-menu img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.logo-menu h2 {
+  margin: 0;
+  font-size: 20px;
+  color: white;
+}
+
+/* =========================
+   MENU
+========================= */
+
+.navegacao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-menu {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #a9adb5;
+  padding: 14px 15px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.item-menu:hover {
+  background: #191c21;
+  color: white;
+}
+
+.item-menu.ativo {
+  background: #b51f2a;
+  color: white;
+}
+
+/* =========================
+   SAIR
+========================= */
+
+.botao-sair {
+  margin-top: auto;
+  width: 100%;
+  border: none;
+  background: #191c21;
+  color: #c9cbd0;
+  padding: 14px 15px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.botao-sair:hover {
+  background: #b51f2a;
+  color: white;
+}
+
+/* =========================
+   CONTEÚDO
+========================= */
+
+.conteudo-dashboard {
+  margin-left: 250px;
+  width: calc(100% - 250px);
+  min-height: 100vh;
+  padding: 0 35px 40px;
+  background: #080a0d;
+}
+
+/* =========================
+   TOPO
+========================= */
+
+.topo-dashboard {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1d2026;
+}
+
+.botao-menu {
+  display: none;
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.usuario-topo {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.texto-usuario {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.texto-usuario span {
+  color: #888d96;
+  font-size: 13px;
+}
+
+.texto-usuario strong {
+  color: white;
+  font-size: 16px;
+}
+
+.avatar {
+  width: 43px;
+  height: 43px;
+  border-radius: 50%;
+  background: #b51f2a;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* =========================
+   BOAS-VINDAS
+========================= */
+
+.boas-vindas {
+  padding: 35px 0 25px;
+}
+
+.boas-vindas h1 {
+  margin: 0 0 10px;
+  font-size: 30px;
+  color: white;
+}
+
+.boas-vindas p {
+  margin: 0;
+  color: #9297a0;
+  font-size: 16px;
+}
+
+/* =========================
+   CARDS
+========================= */
+
+.cards-dashboard {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.card-dashboard {
+  background: #111419;
+  border: 1px solid #1d2026;
+  border-radius: 15px;
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.25);
+}
+
+.icone-card {
+  width: 55px;
+  height: 55px;
+  border-radius: 12px;
+  background: #281519;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 25px;
+}
+
+.card-dashboard div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.card-dashboard span {
+  color: #8f949d;
+  font-size: 14px;
+}
+
+.card-dashboard strong {
+  font-size: 25px;
+  color: white;
+}
+
+/* =========================
+   ÁREA DE ATIVIDADES
+========================= */
+
+.area-dashboard {
+  background: #111419;
+  border: 1px solid #1d2026;
+  border-radius: 15px;
+  padding: 25px;
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.25);
+}
+
+.cabecalho-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 25px;
+}
+
+.cabecalho-area h2 {
+  margin: 0 0 6px;
+  color: white;
+  font-size: 21px;
+}
+
+.cabecalho-area p {
+  margin: 0;
+  color: #888d96;
+  font-size: 14px;
+}
+
+.botao-adicionar {
+  border: none;
+  background: #b51f2a;
+  color: white;
+  padding: 11px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.botao-adicionar:hover {
+  background: #921923;
+}
+
+/* =========================
+   ATIVIDADE VAZIA
+========================= */
+
+.atividade-vazia {
+  min-height: 250px;
+  border: 1px dashed #30343b;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.icone-vazio {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+.atividade-vazia h3 {
+  margin: 5px 0;
+  color: #e6e6e6;
+}
+
+.atividade-vazia p {
+  margin: 5px 0;
+  color: #777d87;
+  max-width: 400px;
+}
+
+/* =========================
+   RESPONSIVO
+========================= */
+
+@media (max-width: 900px) {
+
+  .menu-lateral {
+    transform: translateX(-100%);
+    transition: 0.3s;
+  }
+
+  .menu-lateral.aberto {
+    transform: translateX(0);
+  }
+
+  .conteudo-dashboard {
+    margin-left: 0;
+    width: 100%;
+    padding: 0 20px 30px;
+  }
+
+  .botao-menu {
+    display: block;
+  }
+
+  .cards-dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+
+  .conteudo-dashboard {
+    padding: 0 15px 25px;
+  }
+
+  .boas-vindas h1 {
+    font-size: 24px;
+  }
+
+  .cabecalho-area {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .botao-adicionar {
+    width: 100%;
+  }
+
+  .texto-usuario {
+    display: none;
+  }
+}
