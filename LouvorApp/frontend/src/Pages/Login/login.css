@@ -256,6 +256,97 @@
   cursor: pointer;
 }
 
+.login-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 35px;
+  border-radius: 25px;
+  background: #ffffff;
+  color: #151515;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.login-logo {
+  text-align: center;
+  font-size: 52px;
+  margin-bottom: 12px;
+}
+
+.login-card h1,
+.login-subtitulo {
+  text-align: center;
+}
+
+.login-card h1 {
+  margin: 0;
+}
+
+.login-subtitulo {
+  color: #777777;
+  margin-bottom: 28px;
+}
+
+.campo {
+  margin-bottom: 18px;
+}
+
+.campo label {
+  display: block;
+  margin-bottom: 7px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.campo input {
+  width: 100%;
+  height: 50px;
+  padding: 0 14px;
+  border: 1px solid #dddddd;
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.btn-login {
+  width: 100%;
+  height: 52px;
+  border: none;
+  border-radius: 10px;
+  background: #b3131b;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.btn-login:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.link-login {
+  display: block;
+  margin: 16px auto 0;
+  border: 0;
+  background: transparent;
+  color: #b3131b;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.mensagem-erro,
+.mensagem-sucesso {
+  margin: 12px 0;
+}
+
+.mensagem-erro {
+  color: #b3131b;
+}
+
+.mensagem-sucesso {
+  color: #15803d;
+}
+
 /* Responsividade */
 
 @media (max-width: 700px) {

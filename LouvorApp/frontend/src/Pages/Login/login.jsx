@@ -1,272 +1,204 @@
 import { useState } from "react";
 import "./login.css";
+import { api } from "../../api";
 
 function Login() {
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
 
-  const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [carregando, setCarregando] = useState(false);
+    const [email, setEmail] = useState("");
+    const [senha, setSenha] = useState("");
 
-  async function fazerLogin(event) {
-    event.preventDefault();
+    const [carregando, setCarregando] = useState(false);
+    const [erro, setErro] = useState("");
 
-    if (!email || !senha) {
-      alert("Preencha o e-mail e a senha.");
-      return;
-    }
+    async function fazerLogin(event) {
 
-    setCarregando(true);
+        event.preventDefault();
 
-    try {
-      const resposta = await fetch(
-        "http://127.0.0.1:5000/api/login",
-        {
-          method: "POST",
+        setErro("");
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+        if (!email || !senha) {
 
-          body: JSON.stringify({
-            email: email,
-            senha: senha,
-          }),
+            setErro("Preencha o e-mail e a senha.");
+
+            return;
         }
-      );
 
-      const resultado = await resposta.json();
+        try {
 
-      console.log("RESPOSTA DO FLASK:");
-      console.log(resultado);
+            setCarregando(true);
 
-      if (!resposta.ok) {
-        alert(resultado.erro || "Erro ao fazer login.");
-        return;
-      }
+            const resposta = await api.post(
+                "/api/login",
+                {
+                    email: email,
+                    senha: senha
+                }
+            );
 
-      alert(
-        `Bem-vindo, ${resultado.usuario.nome}!`
-      );
+            console.log(
+                "LOGIN:",
+                resposta.data
+            );
 
-      // Salva o usuário no navegador
-      localStorage.setItem(
-        "usuario",
-        JSON.stringify(resultado.usuario)
-      );
+            /*
+             * IMPORTANTE:
+             * Salvamos o objeto inteiro do usuário.
+             *
+             * Assim também será salvo:
+             * tipo_usuario = admin ou membro
+             */
 
-      console.log(
-        "Usuário logado:",
-        resultado.usuario
-      );
+            localStorage.setItem(
+                "usuario",
+                JSON.stringify(
+                    resposta.data.usuario
+                )
+            );
+            localStorage.setItem(
+                "token",
+                resposta.data.token
+            );
 
-    } catch (erro) {
-      console.error(
-        "ERRO AO CONECTAR COM O FLASK:",
-        erro
-      );
+            window.location.href = "/";
 
-      alert(
-        "Não foi possível conectar ao servidor. Verifique se o Flask está rodando."
-      );
+        } catch (error) {
 
-    } finally {
-      setCarregando(false);
+            console.error(
+                "Erro no login:",
+                error
+            );
+
+            if (
+                error.response &&
+                error.response.data
+            ) {
+
+                setErro(
+                    error.response.data.erro ||
+                    "E-mail ou senha incorretos."
+                );
+
+            } else {
+
+                setErro(
+                    "Erro ao conectar com o servidor."
+                );
+
+            }
+
+        } finally {
+
+            setCarregando(false);
+
+        }
+
     }
-  }
 
-  return (
-    <main className="pagina-login">
+    return (
 
-      {/* Fundo vermelho */}
-      <div className="fundo-vermelho"></div>
+        <div className="pagina-login">
 
-      <section className="login-container">
+            <div className="login-card">
 
-        {/* Logo */}
-        <div className="logo-area">
-          <div className="logo-circulo">
+                <div className="login-logo">
 
-            <img
-              src="/logo-igreja.png"
-              alt="Logo da igreja"
-            />
+                    🎵
 
-          </div>
-        </div>
+                </div>
 
-        {/* Cabeçalho */}
-        <div className="cabecalho-login">
+                <h1>
+                    Louvor App
+                </h1>
 
-          <h1>
-            Seja
-            <span>bem-vindo!</span>
-          </h1>
+                <p className="login-subtitulo">
+                    Entre na sua conta
+                </p>
 
-          <p>
-            Entre na sua conta e faça parte
-            <br />
-            desta missão de fé e louvor.
-          </p>
 
-        </div>
+                <form onSubmit={fazerLogin}>
 
-        {/* Formulário */}
-        <form
-          className="formulario-login"
-          onSubmit={fazerLogin}
-        >
+                    <div className="campo">
 
-          {/* E-mail */}
-          <div className="campo-login">
+                        <label>
+                            E-mail
+                        </label>
 
-            <label htmlFor="email">
-              E-mail
-            </label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(event) =>
+                                setEmail(
+                                    event.target.value
+                                )
+                            }
+                            placeholder="Digite seu e-mail"
+                            autoComplete="email"
+                        />
 
-            <div className="input-login">
+                    </div>
 
-              <span>✉</span>
 
-              <input
-                id="email"
-                type="email"
-                placeholder="seuemail@gmail.com"
-                value={email}
-                onChange={(event) =>
-                  setEmail(event.target.value)
-                }
-                required
-              />
+                    <div className="campo">
 
-            </div>
+                        <label>
+                            Senha
+                        </label>
 
-          </div>
+                        <input
+                            type="password"
+                            value={senha}
+                            onChange={(event) =>
+                                setSenha(
+                                    event.target.value
+                                )
+                            }
+                            placeholder="Digite sua senha"
+                            autoComplete="current-password"
+                        />
 
-          {/* Senha */}
-          <div className="campo-login">
+                    </div>
 
-            <label htmlFor="senha">
-              Senha
-            </label>
 
-            <div className="input-login">
+                    {erro && (
 
-              <span>🔒</span>
+                        <div className="mensagem-erro">
 
-              <input
-                id="senha"
-                type={
-                  mostrarSenha
-                    ? "text"
-                    : "password"
-                }
-                placeholder="••••••••••"
-                value={senha}
-                onChange={(event) =>
-                  setSenha(event.target.value)
-                }
-                required
-              />
+                            {erro}
 
-              <button
-                type="button"
-                className="mostrar-senha"
-                onClick={() =>
-                  setMostrarSenha(!mostrarSenha)
-                }
-              >
-                {mostrarSenha ? "◉" : "◌"}
-              </button>
+                        </div>
+
+                    )}
+
+
+                    <button
+                        type="submit"
+                        className="btn-login"
+                        disabled={carregando}
+                    >
+
+                        {carregando
+                            ? "Entrando..."
+                            : "Entrar"}
+
+                    </button>
+
+                </form>
+
+                <button
+                    type="button"
+                    className="link-login"
+                    onClick={() => {
+                        window.location.href = "/cadastro";
+                    }}
+                >
+                    Criar uma conta
+                </button>
 
             </div>
 
-          </div>
-
-          {/* Esqueci minha senha */}
-          <button
-            type="button"
-            className="esqueci-senha"
-            onClick={() =>
-              alert(
-                "A recuperação de senha será criada em uma próxima etapa."
-              )
-            }
-          >
-            Esqueceu sua senha?
-          </button>
-
-          {/* Botão entrar */}
-          <button
-            type="submit"
-            className="botao-entrar"
-            disabled={carregando}
-          >
-
-            <span>
-              {carregando
-                ? "Entrando..."
-                : "Entrar"}
-            </span>
-
-            <span>→</span>
-
-          </button>
-
-        </form>
-
-        {/* Separador */}
-        <div className="separador-login">
-
-          <span></span>
-
-          <p>OU ENTRE COM</p>
-
-          <span></span>
-
         </div>
 
-        {/* Google */}
-        <div className="botoes-login">
-
-          <button
-            type="button"
-            onClick={() =>
-              alert(
-                "Login com Google será configurado em uma próxima etapa."
-              )
-            }
-          >
-            <strong>G</strong>
-            Google
-          </button>
-
-        </div>
-
-        {/* Cadastro */}
-        <div className="rodape-login">
-
-          <p>
-            Ainda não tem uma conta?
-          </p>
-
-          <button
-            type="button"
-            onClick={() =>
-              alert(
-                "A troca para a tela de cadastro será configurada na próxima etapa."
-              )
-            }
-          >
-            Criar conta
-          </button>
-
-        </div>
-
-      </section>
-
-    </main>
-  );
+    );
 }
 
 export default Login;

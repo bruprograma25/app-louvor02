@@ -1,11 +1,18 @@
-from flask_sqlalchemy import SQLAlchemy
+
 from datetime import datetime
+
+from flask_sqlalchemy import SQLAlchemy
 
 
 db = SQLAlchemy()
 
 
+# =========================================================
+# USUÁRIO
+# =========================================================
+
 class Usuario(db.Model):
+
     __tablename__ = "usuarios"
 
     id = db.Column(
@@ -34,30 +41,217 @@ class Usuario(db.Model):
         nullable=False
     )
 
-    criado_em = db.Column(
-        db.DateTime,
-        default=datetime.utcnow,
-        nullable=False
+    tipo_usuario = db.Column(
+        db.String(20),
+        nullable=False,
+        default="membro"
     )
 
-    def __init__(
-        self,
-        nome,
-        sobrenome,
-        email,
-        senha
-    ):
-        self.nome = nome
-        self.sobrenome = sobrenome
-        self.email = email
-        self.senha = senha
+    criado_em = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow
+    )
 
     def to_dict(self):
+
         return {
             "id": self.id,
             "nome": self.nome,
             "sobrenome": self.sobrenome,
             "email": self.email,
-            "criado_em": self.criado_em.isoformat()
-            if self.criado_em else None
+            "tipo_usuario": self.tipo_usuario,
+            "criado_em": (
+                self.criado_em.isoformat()
+                if self.criado_em
+                else None
+            )
         }
+
+
+# =========================================================
+# LOUVOR
+# =========================================================
+
+class Louvor(db.Model):
+
+    __tablename__ = "louvores"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    # -----------------------------------------------------
+    # INFORMAÇÕES BÁSICAS
+    # -----------------------------------------------------
+
+    titulo = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
+    artista = db.Column(
+        db.String(150),
+        nullable=True
+    )
+
+    tom = db.Column(
+        db.String(20),
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # BPM
+    # -----------------------------------------------------
+
+    bpm = db.Column(
+        db.Integer,
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # CATEGORIA
+    # -----------------------------------------------------
+
+    categoria = db.Column(
+        db.String(50),
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # LETRA
+    # -----------------------------------------------------
+
+    letra = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # ESTRUTURA DA LETRA
+    # -----------------------------------------------------
+
+    estrutura_letra = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # LINK
+    # -----------------------------------------------------
+
+    link = db.Column(
+        db.String(500),
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # IMAGEM
+    # -----------------------------------------------------
+
+    imagem = db.Column(
+        db.String(500),
+        nullable=True
+    )
+
+    # -----------------------------------------------------
+    # DATA DE CRIAÇÃO
+    # -----------------------------------------------------
+
+    criado_em = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow
+    )
+
+    # =====================================================
+    # CONVERTER PARA JSON
+    # =====================================================
+
+    def to_dict(self):
+
+        return {
+
+            "id": self.id,
+
+            "titulo": self.titulo,
+
+            "artista": self.artista,
+
+            "tom": self.tom,
+
+            "bpm": self.bpm,
+
+            "categoria": self.categoria,
+
+            "letra": self.letra,
+
+            "estrutura_letra":
+                self.estrutura_letra,
+
+            "link": self.link,
+
+            "imagem": self.imagem,
+
+            "criado_em": (
+                self.criado_em.isoformat()
+                if self.criado_em
+                else None
+            )
+        }
+
+
+class Culto(db.Model):
+
+    __tablename__ = "eventos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(150), nullable=False)
+    data = db.Column(db.String(10), nullable=False)
+    hora = db.Column(db.String(5), nullable=True)
+    local = db.Column(db.String(200), nullable=True)
+    descricao = db.Column(db.Text, nullable=True)
+    publicado = db.Column(db.Boolean, nullable=False, default=False)
+    criado_em = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow
+    )
+
+
+class EscalaMembro(db.Model):
+
+    __tablename__ = "escalas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    culto_id = db.Column(
+        db.Integer,
+        db.ForeignKey("eventos.id"),
+        nullable=False
+    )
+    usuario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("usuarios.id"),
+        nullable=False
+    )
+    funcao = db.Column(db.String(100), nullable=False)
+    confirmado = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class CultoLouvor(db.Model):
+
+    __tablename__ = "culto_louvores"
+
+    id = db.Column(db.Integer, primary_key=True)
+    culto_id = db.Column(
+        db.Integer,
+        db.ForeignKey("eventos.id"),
+        nullable=False
+    )
+    louvor_id = db.Column(
+        db.Integer,
+        db.ForeignKey("louvores.id"),
+        nullable=False
+    )
+    ordem = db.Column(db.Integer, nullable=False, default=1)

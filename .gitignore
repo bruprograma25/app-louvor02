@@ -1,0 +1,23 @@
+# Local configuration and secrets
+.env
+**/.env
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# JavaScript dependencies and build output
+node_modules/
+dist/
+build/
+
+# Local backups
+**/app_backup/

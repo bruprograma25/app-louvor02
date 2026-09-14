@@ -1,187 +1,294 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import "./dashboard.css";
-import logoIgreja from "../../assets/images/logo-igreja.png";
+import { getUsuarioLogado, usuarioEhAdmin } from "../../auth";
+import { api } from "../../api";
 
 function Dashboard() {
-  const [menuAberto, setMenuAberto] = useState(false);
+  const usuario = getUsuarioLogado();
+  const ehAdmin = usuarioEhAdmin(usuario);
+  const [quantidadeLouvores, setQuantidadeLouvores] = useState(0);
+  const [carregando, setCarregando] = useState(true);
 
-  let usuario = null;
+  // =====================================================
+  // BUSCAR QUANTIDADE DE LOUVORES
+  // =====================================================
 
-  try {
-    const usuarioSalvo = localStorage.getItem("usuario");
+  async function carregarLouvores() {
+    try {
+      setCarregando(true);
 
-    if (usuarioSalvo) {
-      usuario = JSON.parse(usuarioSalvo);
+      const resposta = await api.get("/api/louvores");
+
+      setQuantidadeLouvores(resposta.data.length);
+    } catch (erro) {
+      console.error("Erro ao carregar louvores:", erro);
+      setQuantidadeLouvores(0);
+    } finally {
+      setCarregando(false);
     }
-  } catch (erro) {
-    console.error("Erro ao carregar usuário:", erro);
-    localStorage.removeItem("usuario");
   }
 
-  function sair() {
-    localStorage.removeItem("usuario");
-    window.location.href = "/";
+  // =====================================================
+  // CARREGAR AO ABRIR
+  // =====================================================
+
+  useEffect(() => {
+    carregarLouvores();
+  }, []);
+
+  // =====================================================
+  // ABRIR LOUVORES
+  // =====================================================
+
+  function abrirLouvores() {
+    window.location.href = "/louvores";
   }
 
-  // Se não tiver usuário, volta para o login
-  if (!usuario) {
-    window.location.href = "/";
-    return null;
+  // =====================================================
+  // NOVO LOUVOR
+  // =====================================================
+
+  function abrirNovoLouvor() {
+    window.location.href = "/novo-louvor";
   }
+
+  function abrirAgenda() {
+    window.location.href = "/agenda";
+  }
+
+  // =====================================================
+  // INTERFACE
+  // =====================================================
 
   return (
     <div className="dashboard">
 
       {/* MENU LATERAL */}
-      <aside className={`menu-lateral ${menuAberto ? "aberto" : ""}`}>
 
-        <div className="logo-menu">
-          <img src={logoIgreja} alt="Logo da Igreja" />
+      <aside className="sidebar">
 
-          <h2>Louvor App</h2>
+        <div className="logo-area">
+
+          <div className="logo-circle">
+            ♫
+          </div>
+
+          <h1>
+            Louvor App
+          </h1>
+
         </div>
 
-        <nav className="navegacao">
+        <nav>
 
-          <button className="item-menu ativo">
-            🏠
-            <span>Dashboard</span>
+          <button
+            className="menu-item active"
+            type="button"
+          >
+            🏠 Dashboard
           </button>
 
-          <button className="item-menu">
-            🎵
-            <span>Músicas</span>
+          <button
+            className="menu-item"
+            type="button"
+            onClick={abrirLouvores}
+          >
+            🎵 Louvores
           </button>
 
-          <button className="item-menu">
-            📅
-            <span>Escalas</span>
+          <button
+            className="menu-item"
+            type="button"
+            onClick={abrirAgenda}
+          >
+            📅 Agenda
           </button>
 
-          <button className="item-menu">
-            👥
-            <span>Equipe</span>
-          </button>
-
-          <button className="item-menu">
-            ⚙️
-            <span>Configurações</span>
+          <button
+            className="menu-item"
+            type="button"
+          >
+            👥 Equipe
           </button>
 
         </nav>
 
-        <button className="botao-sair" onClick={sair}>
-          🚪
-          <span>Sair</span>
-        </button>
-
       </aside>
 
-      {/* CONTEÚDO */}
-      <main className="conteudo-dashboard">
+
+      {/* CONTEÚDO PRINCIPAL */}
+
+      <main className="main-content">
 
         {/* TOPO */}
-        <header className="topo-dashboard">
 
-          <button
-            className="botao-menu"
-            onClick={() => setMenuAberto(!menuAberto)}
-          >
-            ☰
-          </button>
+        <header className="topbar">
 
-          <div className="usuario-topo">
+          <div>
 
-            <div className="texto-usuario">
-              <span>Olá,</span>
+            <p className="welcome">
+              Bem-vindo(a) 👋
+            </p>
 
-              <strong>
-                {usuario.nome || "Usuário"}
-              </strong>
+            <h2>
+              Dashboard
+            </h2>
+
+          </div>
+
+          <div className="user-area">
+
+            <div className="user-avatar">
+              U
             </div>
 
-            <div className="avatar">
-              {(usuario.nome || "U")
-                .charAt(0)
-                .toUpperCase()}
-            </div>
+            <span>
+              {usuario?.nome || "Usuário"}
+            </span>
 
           </div>
 
         </header>
 
-        {/* BOAS-VINDAS */}
-        <section className="boas-vindas">
 
-          <h1>Bem-vindo ao Louvor App! 🎵</h1>
+        {/* CONTEÚDO */}
 
-          <p>
-            Organize músicas, escalas e sua equipe de louvor
-            em um só lugar.
-          </p>
+        <section className="content">
 
-        </section>
+          {/* TÍTULO */}
 
-        {/* CARDS */}
-        <section className="cards-dashboard">
-
-          <div className="card-dashboard">
-            <div className="icone-card">🎵</div>
+          <div className="page-title">
 
             <div>
-              <span>Músicas</span>
-              <strong>0</strong>
-            </div>
-          </div>
 
-          <div className="card-dashboard">
-            <div className="icone-card">📅</div>
+              <h3>
+                Visão geral
+              </h3>
 
-            <div>
-              <span>Escalas</span>
-              <strong>0</strong>
-            </div>
-          </div>
+              <p>
+                Gerencie os louvores da sua equipe.
+              </p>
 
-          <div className="card-dashboard">
-            <div className="icone-card">👥</div>
-
-            <div>
-              <span>Membros</span>
-              <strong>0</strong>
-            </div>
-          </div>
-
-        </section>
-
-        {/* ATIVIDADES */}
-        <section className="area-dashboard">
-
-          <div className="cabecalho-area">
-
-            <div>
-              <h2>Próximas atividades</h2>
-              <p>Confira os próximos compromissos da equipe.</p>
             </div>
 
-            <button className="botao-adicionar">
-              + Adicionar
-            </button>
+            {ehAdmin && (
+              <button
+                className="add-button"
+                type="button"
+                onClick={abrirNovoLouvor}
+              >
+                + Novo louvor
+              </button>
+            )}
 
           </div>
 
-          <div className="atividade-vazia">
 
-            <div className="icone-vazio">
-              📋
+          {/* CARDS */}
+
+          <div className="cards">
+
+            {/* LOUVORES */}
+
+            <div
+              className="card"
+              onClick={abrirLouvores}
+              style={{ cursor: "pointer" }}
+            >
+
+              <span className="card-icon">
+                🎵
+              </span>
+
+              <div>
+
+                <strong>
+                  {carregando
+                    ? "..."
+                    : quantidadeLouvores}
+                </strong>
+
+                <p>
+                  Louvores cadastrados
+                </p>
+
+              </div>
+
             </div>
 
-            <h3>Nenhuma atividade cadastrada</h3>
+
+            {/* AGENDA */}
+
+            <div className="card" onClick={abrirAgenda} style={{ cursor: "pointer" }}>
+
+              <span className="card-icon">
+                📅
+              </span>
+
+              <div>
+
+                <strong>
+                  0
+                </strong>
+
+                <p>
+                  Próximas ministrações
+                </p>
+
+              </div>
+
+            </div>
+
+
+            {/* EQUIPE */}
+
+            <div className="card">
+
+              <span className="card-icon">
+                👥
+              </span>
+
+              <div>
+
+                <strong>
+                  0
+                </strong>
+
+                <p>
+                  Membros da equipe
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* ÁREA DE LOUVORES */}
+
+          <div className="empty-state">
+
+            <div className="empty-icon">
+              🎼
+            </div>
+
+            <h3>
+              Seus louvores
+            </h3>
 
             <p>
-              Quando você criar uma escala ou atividade,
-              ela aparecerá aqui.
+              Acesse sua biblioteca de louvores cadastrados.
             </p>
+
+            <button
+              className="add-button"
+              type="button"
+              onClick={abrirLouvores}
+            >
+              🎵 Ver meus louvores
+            </button>
 
           </div>
 
