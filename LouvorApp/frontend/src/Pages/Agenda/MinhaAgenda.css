@@ -1,0 +1,235 @@
+.minha-agenda-page {
+  min-height: 100vh;
+  padding: 32px;
+  background: #f5f7fb;
+  color: #18212f;
+}
+
+.minha-agenda-header,
+.minha-agenda-header-actions,
+.minha-agenda-section-title,
+.minha-agenda-card-header,
+.minha-agenda-detalhes {
+  display: flex;
+  gap: 12px;
+}
+
+.minha-agenda-header {
+  justify-content: space-between;
+  align-items: flex-start;
+  max-width: 1100px;
+  margin: 0 auto 24px;
+}
+
+.minha-agenda-header h1 {
+  margin: 8px 0;
+}
+
+.minha-agenda-header-actions {
+  flex-wrap: wrap;
+}
+
+.minha-agenda-page button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.minha-agenda-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 22px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+}
+
+.minha-agenda-section-title {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.minha-agenda-section-title h2 {
+  margin: 4px 0 0;
+}
+
+.minha-agenda-lista {
+  display: grid;
+  gap: 18px;
+}
+
+.minha-agenda-card {
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.minha-agenda-card-header {
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.minha-agenda-card h3 {
+  margin: 5px 0 0;
+  font-size: 1.35rem;
+}
+
+.minha-agenda-status {
+  color: #15803d;
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.minha-agenda-funcao {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  text-transform: capitalize;
+}
+
+.minha-agenda-detalhes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.minha-agenda-detalhes div {
+  display: grid;
+  gap: 4px;
+}
+
+.minha-agenda-detalhes span,
+.minha-agenda-louvores h4 {
+  color: #64748b;
+  font-size: .85rem;
+}
+
+.minha-agenda-louvores {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.minha-agenda-louvores h4 {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.minha-agenda-louvores ol {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.minha-agenda-louvores li {
+  padding: 4px 0;
+}
+
+.minha-agenda-empty,
+.minha-agenda-louvores p {
+  color: #64748b;
+}
+
+.minha-agenda-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.minha-agenda-acoes button:first-child {
+  background: #15803d;
+  color: #fff;
+}
+
+.minha-agenda-acoes button:nth-child(2) {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.minha-agenda-acoes button:last-child {
+  background: #d97706;
+  color: #fff;
+}
+
+.minha-agenda-acoes button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.minha-agenda-troca {
+  color: #92400e;
+  font-size: .9rem;
+}
+
+.minha-agenda-troca-form {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fffbeb;
+}
+
+.minha-agenda-troca-form select {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #d7dce5;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}
+
+.minha-agenda-troca-form button {
+  background: #d97706;
+  color: #fff;
+}
+
+.minha-agenda-error {
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  color: #b91c1c;
+}
+
+@media (max-width: 760px) {
+  .minha-agenda-page {
+    padding: 18px;
+  }
+
+  .minha-agenda-header,
+  .minha-agenda-card-header {
+    display: block;
+  }
+
+  .minha-agenda-header-actions {
+    margin-top: 16px;
+  }
+
+  .minha-agenda-detalhes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 14px;
+  }
+
+  .minha-agenda-funcao {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  .minha-agenda-acoes {
+    display: grid;
+  }
+
+  .minha-agenda-troca-form {
+    grid-template-columns: 1fr;
+  }
+}

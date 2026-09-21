@@ -5,6 +5,11 @@ import Louvores from "./Pages/Louvores/Louvores";
 import FormLouvor from "./Pages/Louvores/FormLouvor";
 import DetalhesLouvor from "./Pages/Louvores/DetalhesLouvor";
 import Agenda from "./Pages/Agenda/Agenda";
+import MontarEscala from "./Pages/Agenda/montarescala";
+import MinhaAgenda from "./Pages/Agenda/MinhaAgenda";
+import Notificacoes from "./Pages/Notificacoes/Notificacoes";
+import Equipe from "./Pages/Equipe/Equipe";
+import DetalhesEvento from "./Pages/Agenda/DetalhesEvento";
 import {
   getUsuarioLogado,
   usuarioEhAdmin,
@@ -68,6 +73,36 @@ function App() {
 
   if (caminho === "/agenda") {
     return <Agenda />;
+  }
+
+  if (caminho === "/minha-agenda") {
+    if (usuarioEhAdmin(usuario)) {
+      window.location.replace("/agenda");
+      return null;
+    }
+
+    return <MinhaAgenda />;
+  }
+
+  if (caminho === "/notificacoes") {
+    return <Notificacoes />;
+  }
+
+  if (caminho === "/equipe") {
+    return <Equipe />;
+  }
+
+  if (caminho === "/detalhes-evento") {
+    return <DetalhesEvento />;
+  }
+
+  if (caminho === "/montar-escala") {
+    if (!usuarioEhAdmin(usuario)) {
+      window.location.replace("/agenda");
+      return null;
+    }
+
+    return <MontarEscala />;
   }
 
 

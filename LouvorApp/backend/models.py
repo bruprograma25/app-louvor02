@@ -47,6 +47,11 @@ class Usuario(db.Model):
         default="membro"
     )
 
+    funcao_principal = db.Column(
+        db.String(100),
+        nullable=True
+    )
+
     criado_em = db.Column(
         db.DateTime,
         nullable=False,
@@ -61,6 +66,7 @@ class Usuario(db.Model):
             "sobrenome": self.sobrenome,
             "email": self.email,
             "tipo_usuario": self.tipo_usuario,
+            "funcao_principal": self.funcao_principal or "",
             "criado_em": (
                 self.criado_em.isoformat()
                 if self.criado_em
@@ -237,6 +243,44 @@ class EscalaMembro(db.Model):
     )
     funcao = db.Column(db.String(100), nullable=False)
     confirmado = db.Column(db.Boolean, nullable=False, default=False)
+    status = db.Column(
+        db.String(30),
+        nullable=False,
+        default="pendente",
+    )
+    troca_para_usuario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("usuarios.id"),
+        nullable=True,
+    )
+
+
+class Notificacao(db.Model):
+
+    __tablename__ = "notificacoes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("usuarios.id"),
+        nullable=False,
+        index=True,
+    )
+    tipo = db.Column(db.String(40), nullable=False)
+    titulo = db.Column(db.String(160), nullable=False)
+    mensagem = db.Column(db.Text, nullable=False)
+    evento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("eventos.id"),
+        nullable=True,
+    )
+    referencia = db.Column(db.String(160), nullable=True)
+    lida = db.Column(db.Boolean, nullable=False, default=False)
+    criada_em = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
 
 
 class CultoLouvor(db.Model):

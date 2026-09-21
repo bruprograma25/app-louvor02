@@ -57,6 +57,10 @@ function Dashboard() {
     window.location.href = "/agenda";
   }
 
+  function abrirEquipe() {
+    window.location.href = "/equipe";
+  }
+
   // =====================================================
   // INTERFACE
   // =====================================================
@@ -108,6 +112,7 @@ function Dashboard() {
           <button
             className="menu-item"
             type="button"
+            onClick={abrirEquipe}
           >
             👥 Equipe
           </button>
