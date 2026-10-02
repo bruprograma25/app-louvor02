@@ -30,23 +30,10 @@ function Login() {
             const resposta = await api.post(
                 "/api/login",
                 {
-                    email: email,
+                    email: email.trim().toLowerCase(),
                     senha: senha
                 }
             );
-
-            console.log(
-                "LOGIN:",
-                resposta.data
-            );
-
-            /*
-             * IMPORTANTE:
-             * Salvamos o objeto inteiro do usuário.
-             *
-             * Assim também será salvo:
-             * tipo_usuario = admin ou membro
-             */
 
             localStorage.setItem(
                 "usuario",
@@ -62,12 +49,6 @@ function Login() {
             window.location.href = "/";
 
         } catch (error) {
-
-            console.error(
-                "Erro no login:",
-                error
-            );
-
             if (
                 error.response &&
                 error.response.data
@@ -119,11 +100,12 @@ function Login() {
 
                     <div className="campo">
 
-                        <label>
+                        <label htmlFor="login-email">
                             E-mail
                         </label>
 
                         <input
+                            id="login-email"
                             type="email"
                             value={email}
                             onChange={(event) =>
@@ -133,6 +115,9 @@ function Login() {
                             }
                             placeholder="Digite seu e-mail"
                             autoComplete="email"
+                            required
+                            aria-invalid={Boolean(erro)}
+                            aria-describedby={erro ? "login-error" : undefined}
                         />
 
                     </div>
@@ -140,11 +125,12 @@ function Login() {
 
                     <div className="campo">
 
-                        <label>
+                        <label htmlFor="login-password">
                             Senha
                         </label>
 
                         <input
+                            id="login-password"
                             type="password"
                             value={senha}
                             onChange={(event) =>
@@ -154,6 +140,9 @@ function Login() {
                             }
                             placeholder="Digite sua senha"
                             autoComplete="current-password"
+                            required
+                            aria-invalid={Boolean(erro)}
+                            aria-describedby={erro ? "login-error" : undefined}
                         />
 
                     </div>
@@ -161,7 +150,7 @@ function Login() {
 
                     {erro && (
 
-                        <div className="mensagem-erro">
+                        <div id="login-error" className="mensagem-erro" role="alert">
 
                             {erro}
 

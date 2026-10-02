@@ -1,10 +1,15 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import UniqueConstraint
 
 
 db = SQLAlchemy()
+
+
+def utcnow_naive():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # =========================================================
@@ -55,7 +60,7 @@ class Usuario(db.Model):
     criado_em = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow
+        default=utcnow_naive
     )
 
     def to_dict(self):
@@ -99,6 +104,11 @@ class Louvor(db.Model):
 
     artista = db.Column(
         db.String(150),
+        nullable=True
+    )
+
+    local = db.Column(
+        db.String(200),
         nullable=True
     )
 
@@ -168,7 +178,7 @@ class Louvor(db.Model):
     criado_em = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow
+        default=utcnow_naive
     )
 
     # =====================================================
@@ -184,6 +194,8 @@ class Louvor(db.Model):
             "titulo": self.titulo,
 
             "artista": self.artista,
+
+            "local": self.local,
 
             "tom": self.tom,
 
@@ -222,13 +234,20 @@ class Culto(db.Model):
     criado_em = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow
+        default=utcnow_naive
     )
 
 
 class EscalaMembro(db.Model):
 
     __tablename__ = "escalas"
+    __table_args__ = (
+        UniqueConstraint(
+            "culto_id",
+            "usuario_id",
+            name="uq_escalas_culto_usuario",
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     culto_id = db.Column(
@@ -269,6 +288,7 @@ class Notificacao(db.Model):
     tipo = db.Column(db.String(40), nullable=False)
     titulo = db.Column(db.String(160), nullable=False)
     mensagem = db.Column(db.Text, nullable=False)
+    local = db.Column(db.String(200), nullable=True)
     evento_id = db.Column(
         db.Integer,
         db.ForeignKey("eventos.id"),
@@ -279,13 +299,20 @@ class Notificacao(db.Model):
     criada_em = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow,
+        default=utcnow_naive,
     )
 
 
 class CultoLouvor(db.Model):
 
     __tablename__ = "culto_louvores"
+    __table_args__ = (
+        UniqueConstraint(
+            "culto_id",
+            "louvor_id",
+            name="uq_culto_louvores_culto_louvor",
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     culto_id = db.Column(

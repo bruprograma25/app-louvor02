@@ -42,7 +42,6 @@ function DetalhesLouvor() {
 
         setLouvor(resposta.data);
       } catch (erro) {
-        console.error("Erro ao carregar louvor:", erro);
         setErro(
           erro.response?.data?.erro ||
           "Não foi possível carregar o louvor."
@@ -84,11 +83,6 @@ function DetalhesLouvor() {
       window.location.href = "/louvores";
 
     } catch (erro) {
-      console.error(
-        "Erro ao excluir louvor:",
-        erro
-      );
-
       alert(
         erro.response?.data?.erro ||
         "Não foi possível excluir o louvor."
@@ -269,6 +263,19 @@ function DetalhesLouvor() {
 
           </div>
 
+          <div className="field">
+
+            <label>
+              Local
+            </label>
+
+            <input
+              value={louvor.local || "Não informado"}
+              readOnly
+            />
+
+          </div>
+
         </div>
 
       </section>
@@ -305,6 +312,8 @@ function DetalhesLouvor() {
 
             <img
               src={louvor.imagem}
+              loading="lazy"
+              decoding="async"
               alt={`Capa de ${louvor.titulo}`}
               onError={(e) => {
                 e.currentTarget.style.display =

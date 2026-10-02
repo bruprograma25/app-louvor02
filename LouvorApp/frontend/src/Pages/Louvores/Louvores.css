@@ -6,6 +6,244 @@
   color: #ffffff;
 }
 
+.louvores-page {
+  min-height: 100vh;
+  padding: clamp(20px, 4vw, 42px);
+  background: #0b1020;
+  color: #f8fafc;
+}
+
+.louvores-header,
+.louvores-content {
+  width: min(100%, 1180px);
+  margin-inline: auto;
+}
+
+.louvores-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 28px;
+}
+
+.louvores-header h1 {
+  margin: 7px 0;
+  color: #fff;
+  font-size: clamp(1.7rem, 4vw, 2.25rem);
+}
+
+.louvores-header p {
+  color: #aeb9d2;
+}
+
+.header-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.header-buttons button,
+.louvores-page .add-button,
+.louvor-actions button,
+.louvor-actions a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #34405d;
+  border-radius: 9px;
+  padding: 9px 14px;
+  background: #19233b;
+  color: #f8fafc;
+  font: inherit;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.header-buttons .add-button,
+.louvores-page .add-button {
+  border-color: #6d5dfc;
+  background: #6d5dfc;
+  color: #fff;
+}
+
+.louvores-filtros {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 16px;
+  border: 1px solid #27334d;
+  border-radius: 14px;
+  background: #11182b;
+}
+
+.louvores-filtros label {
+  display: grid;
+  gap: 7px;
+  color: #d6dced;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.louvores-filtros input,
+.louvores-filtros select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #36425f;
+  border-radius: 9px;
+  padding: 9px 12px;
+  background: #0d1425;
+  color: #fff;
+}
+
+.louvores-filtros input::placeholder {
+  color: #a0abc2;
+}
+
+.louvores-contagem {
+  padding-bottom: 10px;
+  color: #c3cce0;
+  white-space: nowrap;
+}
+
+.louvores-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  align-items: stretch;
+  gap: 20px;
+}
+
+.louvor-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #27334d;
+  border-radius: 16px;
+  background: #11182b;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+}
+
+.louvor-image {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  border: 0;
+  border-bottom: 1px solid #27334d;
+  background: linear-gradient(135deg, #202c49, #151c30);
+  color: #b7adff;
+  font-size: 2.7rem;
+  cursor: pointer;
+}
+
+.louvor-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.louvor-image:hover img {
+  transform: scale(1.03);
+}
+
+.louvor-info {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.louvor-info h2 {
+  overflow-wrap: anywhere;
+  margin: 0 0 4px;
+  color: #fff;
+  font-size: 1.12rem;
+}
+
+.louvor-artista {
+  color: #c3cce0;
+}
+
+.louvor-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0;
+}
+
+.louvor-details span {
+  border: 1px solid #36425f;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #19233b;
+  color: #e1e6f0;
+  font-size: 0.8rem;
+}
+
+.louvor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.louvor-actions button,
+.louvor-actions a {
+  min-height: 40px;
+  padding: 7px 10px;
+  font-size: 0.84rem;
+}
+
+.louvor-actions .delete-button {
+  border-color: #653743;
+  background: #321f2a;
+  color: #ffc3cb;
+}
+
+.louvores-message {
+  margin: 24px auto;
+  padding: clamp(28px, 5vw, 56px) 20px;
+  border: 1px solid #27334d;
+  border-radius: 16px;
+  background: #11182b;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.louvores-message h2 {
+  margin: 8px 0;
+  color: #fff;
+}
+
+.louvores-message p {
+  margin-bottom: 18px;
+  color: #c3cce0;
+}
+
+@media (max-width: 700px) {
+  .louvores-header {
+    flex-direction: column;
+  }
+
+  .louvores-filtros {
+    grid-template-columns: 1fr;
+  }
+
+  .louvores-contagem {
+    padding: 0;
+  }
+
+  .louvor-info {
+    min-height: auto;
+  }
+}
+
 /* CABEÇALHO */
 
 .louvor-header {
@@ -440,4 +678,87 @@ textarea::placeholder {
     width: 100%;
   }
 
+}
+
+.form-louvor {
+  width: min(100% - 36px, 760px);
+  margin: clamp(20px, 5vw, 48px) auto;
+  padding: clamp(20px, 4vw, 36px);
+  border: 1px solid #27334d;
+  border-radius: 18px;
+  background: #11182b;
+  color: #f8fafc;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+}
+
+.form-louvor > h2 {
+  margin: 20px 0;
+  color: #fff;
+  font-size: clamp(1.4rem, 4vw, 1.8rem);
+}
+
+.form-louvor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-louvor-fields input,
+.form-louvor-fields textarea {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #36425f;
+  border-radius: 9px;
+  padding: 12px;
+  background: #0d1425;
+  color: #fff;
+}
+
+.form-louvor-fields input::placeholder,
+.form-louvor-fields textarea::placeholder {
+  color: #a0abc2;
+}
+
+.form-louvor-fields textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-louvor-fields textarea,
+.form-louvor-fields button {
+  grid-column: 1 / -1;
+}
+
+.form-louvor-fields button,
+.form-louvor > button {
+  min-height: 46px;
+  border: 1px solid #6d5dfc;
+  border-radius: 9px;
+  padding: 10px 16px;
+  background: #6d5dfc;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.form-louvor-fields button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.form-louvor > p {
+  margin-top: 14px;
+  color: #d6dced;
+}
+
+@media (max-width: 560px) {
+  .form-louvor-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .form-louvor-fields textarea,
+  .form-louvor-fields button {
+    grid-column: 1;
+  }
 }

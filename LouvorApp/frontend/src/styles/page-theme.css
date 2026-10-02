@@ -1,0 +1,396 @@
+.agenda-page,
+.equipe-page,
+.notificacoes-page,
+.detalhes-evento-page,
+.minha-agenda-page,
+.montar-escala-page {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.agenda-form,
+.agenda-card,
+.equipe-panel,
+.notificacoes-panel,
+.detalhes-evento-panel,
+.minha-agenda-panel,
+.montar-escala-panel {
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.agenda-header p,
+.agenda-card > p,
+.agenda-card h4,
+.equipe-header p,
+.equipe-card p,
+.equipe-card small,
+.equipe-empty,
+.notificacoes-header p,
+.detalhes-evento-muted,
+.minha-agenda-empty,
+.minha-agenda-louvores p,
+.montar-escala-empty {
+  color: var(--app-muted);
+}
+
+.agenda-page > p {
+  border: 1px solid var(--app-border);
+  background: var(--app-surface-raised);
+}
+
+.agenda-card-header > strong,
+.notificacoes-count {
+  background: #25204a;
+  color: #c4baff;
+}
+
+.agenda-header-actions button,
+.agenda-form button,
+.agenda-actions button,
+.agenda-page > button,
+.equipe-page button,
+.notificacoes-page button,
+.detalhes-evento-page button,
+.minha-agenda-page button,
+.montar-escala-page button {
+  min-height: 44px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  padding: 9px 14px;
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agenda-page .agenda-primary,
+.equipe-page .equipe-primary,
+.notificacoes-page .notificacoes-primary,
+.montar-escala-page .montar-escala-primary {
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+  color: #fff;
+}
+
+.agenda-page .agenda-primary:hover,
+.equipe-page .equipe-primary:hover,
+.notificacoes-page .notificacoes-primary:hover,
+.montar-escala-page .montar-escala-primary:hover,
+.dashboard-error button:hover {
+  background: var(--app-accent-hover);
+}
+
+.agenda-page .agenda-secondary,
+.agenda-header-actions .agenda-secondary,
+.detalhes-evento-page button,
+.minha-agenda-header-actions button {
+  border-color: #3a4764;
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+}
+
+.agenda-page .agenda-danger {
+  border-color: #653743;
+  background: #321f2a;
+  color: #ffc3cb;
+}
+
+.agenda-page .agenda-actions button:first-child,
+.agenda-page .agenda-actions button:last-child {
+  border-color: var(--app-border);
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+}
+
+.agenda-page .agenda-actions button.agenda-danger {
+  border-color: #653743;
+  background: #321f2a;
+  color: #ffc3cb;
+}
+
+.agenda-form input,
+.agenda-form textarea,
+.agenda-form select,
+.agenda-louvores-field,
+.agenda-louvores-options label,
+.equipe-form input,
+.notificacoes-page select,
+.detalhes-evento-info,
+.detalhes-evento-table,
+.minha-agenda-detalhes,
+.minha-agenda-troca-form,
+.minha-agenda-troca-form select,
+.montar-escala-panel select,
+.montar-escala-louvor-form select,
+.montar-escala-louvor-edicao input {
+  border-color: #36425f;
+  background: #0d1425;
+  color: var(--app-text);
+}
+
+.agenda-louvores-field {
+  border-color: var(--app-border);
+  background: #0d1425;
+}
+
+.agenda-louvores-options input {
+  accent-color: var(--app-accent);
+}
+
+.agenda-field,
+.agenda-form label,
+.equipe-form label,
+.notificacoes-panel,
+.detalhes-evento-info strong,
+.detalhes-evento-table td,
+.minha-agenda-detalhes strong,
+.montar-escala-panel,
+.montar-escala-item {
+  color: var(--app-text);
+}
+
+.agenda-member-row,
+.agenda-member,
+.equipe-card,
+.montar-escala-item,
+.montar-escala-louvor-item {
+  border-color: var(--app-border);
+  background: var(--app-surface-raised);
+}
+
+.agenda-member-name,
+.agenda-member-role,
+.equipe-card h3,
+.notificacao-item h2,
+.notificacao-item p,
+.detalhes-evento-title h2,
+.detalhes-evento-section-title h2,
+.minha-agenda-card h3,
+.montar-escala-item strong {
+  color: var(--app-text);
+}
+
+.agenda-status--confirmado,
+.minha-agenda-acoes button:first-child,
+.montar-escala-page .montar-escala-item-actions button:first-child {
+  background: #143522;
+  color: #86efac;
+}
+
+.agenda-status--pendente {
+  background: #3b2e12;
+  color: #fcd34d;
+}
+
+.agenda-status--recusado,
+.minha-agenda-acoes button:nth-child(2),
+.montar-escala-page .montar-escala-item-actions button:last-child {
+  background: #3d2026;
+  color: #fda4af;
+}
+
+.agenda-status--troca_solicitada,
+.minha-agenda-acoes button:last-child {
+  background: #3b2b15;
+  color: #fdba74;
+}
+
+.agenda-success,
+.equipe-success {
+  color: #86efac;
+}
+
+.agenda-error,
+.equipe-error,
+.notificacoes-error,
+.minha-agenda-error,
+.montar-escala-error {
+  color: #fda4af;
+}
+
+.equipe-status,
+.minha-agenda-funcao,
+.montar-escala-funcao {
+  background: #25204a;
+  color: #c4baff;
+}
+
+.detalhes-evento-label {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #25204a;
+  color: #c4baff;
+}
+
+.minha-agenda-status,
+.detalhes-evento-status.status-confirmado,
+.montar-escala-status-confirmado {
+  color: #86efac;
+}
+
+.detalhes-evento-status.status-recusado,
+.montar-escala-status-recusado {
+  color: #fda4af;
+}
+
+.detalhes-evento-status.status-troca_solicitada,
+.montar-escala-status-troca_solicitada {
+  color: #fdba74;
+}
+
+.equipe-card-actions button:first-child,
+.montar-escala-louvor-edicao button:first-of-type {
+  border-color: #23643b;
+  background: #143522;
+  color: #86efac;
+}
+
+.equipe-card-actions button:last-child,
+.montar-escala-louvor-edicao button:last-of-type {
+  border-color: #653743;
+  background: #321f2a;
+  color: #ffc3cb;
+}
+
+.notificacao-item {
+  border-color: #3b4a6b;
+  border-left-color: #818cf8;
+  background: #151f36;
+}
+
+.notificacao-item.notificacao-lida {
+  border-color: var(--app-border);
+  border-left-color: #64748b;
+  background: var(--app-surface-raised);
+}
+
+.notificacoes-page .notificacao-item button {
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+  color: #fff;
+}
+
+.notificacao-tipo,
+.notificacao-nao-lida {
+  color: #c4baff;
+}
+
+.notificacao-nao-lida {
+  background: #25204a;
+}
+
+.notificacao-item small,
+.detalhes-evento-info span,
+.detalhes-evento-descricao h3,
+.detalhes-evento-table th,
+.detalhes-evento-table td small,
+.detalhes-evento-louvores span,
+.minha-agenda-detalhes span,
+.minha-agenda-louvores h4,
+.montar-escala-evento-resumo span,
+.montar-escala-item div span,
+.montar-escala-louvor-info span {
+  color: var(--app-muted);
+}
+
+.detalhes-evento-info {
+  border: 1px solid var(--app-border);
+}
+
+.detalhes-evento-table th,
+.detalhes-evento-table td,
+.minha-agenda-louvores {
+  border-color: var(--app-border);
+}
+
+.detalhes-evento-table {
+  background: transparent;
+}
+
+.minha-agenda-card {
+  border-color: var(--app-border);
+  background: var(--app-surface-raised);
+}
+
+.minha-agenda-troca-form {
+  border: 1px solid #4b3b1d;
+  background: #282112;
+}
+
+.minha-agenda-troca-form button {
+  border-color: #8a5a17;
+  background: #70450f;
+  color: #ffedd5;
+}
+
+.montar-escala-evento-resumo {
+  border-left-color: var(--app-accent);
+  background: #171d37;
+}
+
+.montar-escala-louvor-item {
+  border: 1px solid var(--app-border);
+}
+
+.pagina-login {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.pagina-login .login-card {
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.pagina-login .login-subtitulo,
+.pagina-login .campo label {
+  color: var(--app-muted);
+}
+
+.pagina-login .campo input {
+  border-color: #36425f;
+  background: #0d1425;
+  color: var(--app-text);
+}
+
+.pagina-login .campo input::placeholder {
+  color: #a0abc2;
+}
+
+.pagina-login .btn-login {
+  background: var(--app-accent);
+}
+
+.pagina-login .btn-login:hover {
+  background: var(--app-accent-hover);
+}
+
+.pagina-login .link-login {
+  color: #c4baff;
+}
+
+.pagina-login .mensagem-erro {
+  color: #fda4af;
+}
+
+.pagina-login .mensagem-sucesso {
+  color: #86efac;
+}
+
+@media (max-width: 760px) {
+  .agenda-page button,
+  .equipe-page button,
+  .notificacoes-page button,
+  .detalhes-evento-page button,
+  .minha-agenda-page button,
+  .montar-escala-page button {
+    min-width: 44px;
+  }
+}

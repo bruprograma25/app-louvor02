@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./dashboard.css";
 import { getUsuarioLogado, usuarioEhAdmin } from "../../auth";
 import { api } from "../../api";
@@ -8,34 +8,47 @@ function Dashboard() {
   const usuario = getUsuarioLogado();
   const ehAdmin = usuarioEhAdmin(usuario);
   const [quantidadeLouvores, setQuantidadeLouvores] = useState(0);
+  const [quantidadeCultos, setQuantidadeCultos] = useState(0);
+  const [quantidadeMembros, setQuantidadeMembros] = useState(0);
   const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
 
   // =====================================================
   // BUSCAR QUANTIDADE DE LOUVORES
   // =====================================================
 
-  async function carregarLouvores() {
+  const carregarResumo = useCallback(async () => {
     try {
       setCarregando(true);
+      setErro("");
+      const respostas = await Promise.all([
+        api.get("/api/louvores"),
+        api.get("/api/eventos"),
+        ...(ehAdmin ? [api.get("/api/agenda/membros")] : []),
+      ]);
 
-      const resposta = await api.get("/api/louvores");
-
-      setQuantidadeLouvores(resposta.data.length);
+      setQuantidadeLouvores(respostas[0].data.length);
+      setQuantidadeCultos(respostas[1].data.length);
+      if (ehAdmin) {
+        setQuantidadeMembros(respostas[2].data.length);
+      }
     } catch (erro) {
-      console.error("Erro ao carregar louvores:", erro);
-      setQuantidadeLouvores(0);
+      setErro(
+        erro.response?.data?.erro ||
+        "Não foi possível carregar o resumo do dashboard."
+      );
     } finally {
       setCarregando(false);
     }
-  }
+  }, [ehAdmin]);
 
   // =====================================================
   // CARREGAR AO ABRIR
   // =====================================================
 
   useEffect(() => {
-    carregarLouvores();
-  }, []);
+    carregarResumo();
+  }, [carregarResumo]);
 
   // =====================================================
   // ABRIR LOUVORES
@@ -57,8 +70,20 @@ function Dashboard() {
     window.location.href = "/agenda";
   }
 
+  function abrirNovoEvento() {
+    window.location.href = "/agenda?novo=1";
+  }
+
+  function abrirNovoAviso() {
+    window.location.href = "/notificacoes?novo=1";
+  }
+
   function abrirEquipe() {
     window.location.href = "/equipe";
+  }
+
+  function abrirMinhaAgenda() {
+    window.location.href = "/minha-agenda";
   }
 
   // =====================================================
@@ -67,60 +92,6 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
-
-      {/* MENU LATERAL */}
-
-      <aside className="sidebar">
-
-        <div className="logo-area">
-
-          <div className="logo-circle">
-            ♫
-          </div>
-
-          <h1>
-            Louvor App
-          </h1>
-
-        </div>
-
-        <nav>
-
-          <button
-            className="menu-item active"
-            type="button"
-          >
-            🏠 Dashboard
-          </button>
-
-          <button
-            className="menu-item"
-            type="button"
-            onClick={abrirLouvores}
-          >
-            🎵 Louvores
-          </button>
-
-          <button
-            className="menu-item"
-            type="button"
-            onClick={abrirAgenda}
-          >
-            📅 Agenda
-          </button>
-
-          <button
-            className="menu-item"
-            type="button"
-            onClick={abrirEquipe}
-          >
-            👥 Equipe
-          </button>
-
-        </nav>
-
-      </aside>
-
 
       {/* CONTEÚDO PRINCIPAL */}
 
@@ -133,7 +104,7 @@ function Dashboard() {
           <div>
 
             <p className="welcome">
-              Bem-vindo(a) 👋
+              {ehAdmin ? "Bem-vindo(a)" : `Olá, ${usuario?.nome || "membro"}`} 👋
             </p>
 
             <h2>
@@ -172,22 +143,41 @@ function Dashboard() {
               </h3>
 
               <p>
-                Gerencie os louvores da sua equipe.
+                {ehAdmin
+                  ? "Gerencie os louvores e a equipe."
+                  : "Acompanhe os louvores e suas próximas escalas."}
               </p>
 
             </div>
 
-            {ehAdmin && (
-              <button
-                className="add-button"
-                type="button"
-                onClick={abrirNovoLouvor}
-              >
-                + Novo louvor
-              </button>
-            )}
+            <button
+              className="add-button"
+              type="button"
+              onClick={abrirNovoLouvor}
+            >
+              + Adicionar louvor
+            </button>
 
           </div>
+
+          <section className="quick-add" aria-label="Adicionar informações">
+            <h3>Adicionar informações</h3>
+            <div className="quick-add-actions">
+              <button type="button" onClick={abrirNovoLouvor}>
+                🎵 Adicionar louvor
+              </button>
+              {ehAdmin && (
+                <>
+                  <button type="button" onClick={abrirNovoEvento}>
+                    📅 Adicionar evento à agenda
+                  </button>
+                  <button type="button" onClick={abrirNovoAviso}>
+                    🔔 Adicionar aviso
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
 
 
           {/* CARDS */}
@@ -196,10 +186,11 @@ function Dashboard() {
 
             {/* LOUVORES */}
 
-            <div
-              className="card"
+            <button
+              className="card card-button"
               onClick={abrirLouvores}
-              style={{ cursor: "pointer" }}
+              type="button"
+              aria-label="Abrir louvores cadastrados"
             >
 
               <span className="card-icon">
@@ -211,21 +202,28 @@ function Dashboard() {
                 <strong>
                   {carregando
                     ? "..."
-                    : quantidadeLouvores}
+                    : erro
+                      ? "—"
+                      : quantidadeLouvores}
                 </strong>
 
                 <p>
                   Louvores cadastrados
                 </p>
 
-              </div>
-
             </div>
+
+            </button>
 
 
             {/* AGENDA */}
 
-            <div className="card" onClick={abrirAgenda} style={{ cursor: "pointer" }}>
+            <button
+              className="card card-button"
+              onClick={abrirAgenda}
+              type="button"
+              aria-label="Abrir agenda de ministrações"
+            >
 
               <span className="card-icon">
                 📅
@@ -234,39 +232,59 @@ function Dashboard() {
               <div>
 
                 <strong>
-                  0
+                  {carregando ? "..." : erro ? "—" : quantidadeCultos}
                 </strong>
 
                 <p>
-                  Próximas ministrações
+                  {ehAdmin ? "Cultos cadastrados" : "Eventos publicados"}
                 </p>
-
-              </div>
 
             </div>
 
+            </button>
 
-            {/* EQUIPE */}
 
-            <div className="card">
+            {/* EQUIPE OU AGENDA PESSOAL */}
+
+            <button
+              className="card card-button"
+              onClick={ehAdmin ? abrirEquipe : abrirMinhaAgenda}
+              type="button"
+              aria-label={ehAdmin ? "Abrir equipe de louvor" : "Abrir minha agenda"}
+            >
 
               <span className="card-icon">
-                👥
+                {ehAdmin ? "👥" : "📋"}
               </span>
 
               <div>
 
                 <strong>
-                  0
+                  {ehAdmin
+                    ? carregando
+                      ? "..."
+                      : erro
+                        ? "—"
+                        : quantidadeMembros
+                    : "→"}
                 </strong>
 
                 <p>
-                  Membros da equipe
+                  {ehAdmin ? "Membros da equipe" : "Minha agenda"}
                 </p>
 
-              </div>
-
             </div>
+
+            {erro && (
+              <div className="dashboard-error" role="alert">
+                <p>{erro}</p>
+                <button type="button" onClick={carregarResumo}>
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            </button>
 
           </div>
 

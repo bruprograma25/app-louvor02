@@ -208,3 +208,136 @@
     grid-template-columns: 1fr;
   }
 }
+
+.equipe-page {
+  padding: clamp(18px, 4vw, 36px);
+}
+
+.equipe-header,
+.equipe-panel,
+.equipe-success,
+.equipe-error {
+  width: min(100%, 1100px);
+}
+
+.equipe-header h1 {
+  font-size: clamp(1.65rem, 4vw, 2.2rem);
+}
+
+.equipe-page button {
+  min-height: 44px;
+}
+
+.equipe-primary {
+  background: #4f46e5;
+  color: #fff;
+  font-weight: 650 !important;
+}
+
+.equipe-section-title {
+  flex-wrap: wrap;
+}
+
+.equipe-section-title > strong {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.86rem;
+}
+
+.equipe-card {
+  min-width: 0;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.equipe-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.equipe-card > div:nth-child(2) {
+  min-width: 0;
+}
+
+.equipe-card h3,
+.equipe-card p,
+.equipe-card small {
+  overflow-wrap: anywhere;
+}
+
+.equipe-avatar {
+  flex-shrink: 0;
+  background: #4f46e5;
+}
+
+.equipe-card-actions button {
+  min-width: 76px;
+}
+
+.equipe-card-actions button:first-child {
+  background: #15803d;
+  color: #fff;
+}
+
+.equipe-card-actions button:last-child {
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.equipe-form {
+  align-items: end;
+}
+
+.equipe-form label {
+  min-width: 0;
+  color: #334155;
+}
+
+.equipe-form input {
+  min-height: 44px;
+  color: #18212f;
+}
+
+.equipe-form input:focus {
+  border-color: #4f46e5;
+  outline: 3px solid #c7d2fe;
+}
+
+.equipe-form .equipe-error {
+  grid-column: 1 / -1;
+  width: auto;
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .equipe-header-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .equipe-header-actions button {
+    width: 100%;
+  }
+
+  .equipe-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+
+  .equipe-avatar {
+    margin: 0;
+  }
+
+  .equipe-status,
+  .equipe-card-actions {
+    grid-column: 2;
+    margin: 0;
+  }
+
+  .equipe-card-actions button {
+    flex: 1;
+  }
+}

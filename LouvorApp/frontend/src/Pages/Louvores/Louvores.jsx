@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import "./Louvores.css";
 import { getUsuarioLogado, usuarioEhAdmin } from "../../auth";
@@ -16,6 +16,35 @@ function Louvores() {
 
   const [erro, setErro] =
     useState("");
+
+  const [termoPesquisa, setTermoPesquisa] = useState("");
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState("");
+
+  const categorias = useMemo(
+    () =>
+      [...new Set(louvores.map((louvor) => louvor.categoria?.trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [louvores]
+  );
+
+  const louvoresFiltrados = useMemo(() => {
+    const termo = termoPesquisa.trim().toLocaleLowerCase("pt-BR");
+
+    return louvores.filter((louvor) => {
+      const correspondePesquisa = [
+        louvor.titulo,
+        louvor.artista,
+        louvor.local,
+        louvor.categoria,
+        louvor.tom,
+      ].some((valor) => valor?.toLocaleLowerCase("pt-BR").includes(termo));
+
+      return (
+        correspondePesquisa &&
+        (!categoriaSelecionada || louvor.categoria === categoriaSelecionada)
+      );
+    });
+  }, [categoriaSelecionada, louvores, termoPesquisa]);
 
 
   // =====================================================
@@ -255,14 +284,12 @@ function Louvores() {
           </button>
 
 
-          {ehAdmin && (
-            <button
-              className="add-button"
-              onClick={novoLouvor}
-            >
-              + Novo louvor
-            </button>
-          )}
+          <button
+            className="add-button"
+            onClick={novoLouvor}
+          >
+            + Adicionar louvor
+          </button>
 
 
         </div>
@@ -366,14 +393,12 @@ function Louvores() {
               </p>
 
 
-              {ehAdmin && (
-                <button
-                  className="add-button"
-                  onClick={novoLouvor}
-                >
-                  + Adicionar primeiro louvor
-                </button>
-              )}
+              <button
+                className="add-button"
+                onClick={novoLouvor}
+              >
+                + Adicionar primeiro louvor
+              </button>
 
 
             </div>
@@ -387,10 +412,55 @@ function Louvores() {
           !erro &&
           louvores.length > 0 && (
 
+            <>
+              <div className="louvores-filtros">
+                <label className="louvores-pesquisa">
+                  <span>Pesquisar louvores</span>
+                  <input
+                    type="search"
+                    value={termoPesquisa}
+                    onChange={(event) => setTermoPesquisa(event.target.value)}
+                    placeholder="Título, artista, categoria ou tom"
+                  />
+                </label>
+                <label className="louvores-categoria">
+                  <span>Categoria</span>
+                  <select
+                    value={categoriaSelecionada}
+                    onChange={(event) => setCategoriaSelecionada(event.target.value)}
+                  >
+                    <option value="">Todas as categorias</option>
+                    {categorias.map((categoria) => (
+                      <option key={categoria} value={categoria}>{categoria}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="louvores-contagem" aria-live="polite">
+                  {louvoresFiltrados.length} de {louvores.length} louvores
+                </p>
+              </div>
+
+              {louvoresFiltrados.length === 0 ? (
+                <div className="louvores-message">
+                  <div className="message-icon" aria-hidden="true">🔎</div>
+                  <h2>Nenhum louvor encontrado</h2>
+                  <p>Altere a pesquisa ou selecione outra categoria.</p>
+                  <button
+                    className="add-button"
+                    type="button"
+                    onClick={() => {
+                      setTermoPesquisa("");
+                      setCategoriaSelecionada("");
+                    }}
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+              ) : (
             <div className="louvores-grid">
 
 
-              {louvores.map(
+              {louvoresFiltrados.map(
                 (louvor) => (
 
                   <article
@@ -401,8 +471,10 @@ function Louvores() {
 
                     {/* IMAGEM */}
 
-                    <div
+                    <button
                       className="louvor-image"
+                      type="button"
+                      aria-label={`Ver detalhes de ${louvor.titulo}`}
                       onClick={() =>
                         detalhesLouvor(
                           louvor.id
@@ -416,6 +488,8 @@ function Louvores() {
                           src={
                             louvor.imagem
                           }
+                          loading="lazy"
+                          decoding="async"
                           alt={
                             `Capa de ${louvor.titulo}`
                           }
@@ -435,7 +509,7 @@ function Louvores() {
 
                       )}
 
-                    </div>
+                    </button>
 
 
                     {/* INFORMAÇÕES */}
@@ -454,6 +528,12 @@ function Louvores() {
                           "Artista não informado"}
 
                       </p>
+
+                      {louvor.local && (
+                        <p className="louvor-artista">
+                          📍 {louvor.local}
+                        </p>
+                      )}
 
 
                       <div className="louvor-details">
@@ -565,6 +645,8 @@ function Louvores() {
 
 
             </div>
+              )}
+            </>
 
           )}
 

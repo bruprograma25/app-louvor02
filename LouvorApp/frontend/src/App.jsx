@@ -10,65 +10,22 @@ import MinhaAgenda from "./Pages/Agenda/MinhaAgenda";
 import Notificacoes from "./Pages/Notificacoes/Notificacoes";
 import Equipe from "./Pages/Equipe/Equipe";
 import DetalhesEvento from "./Pages/Agenda/DetalhesEvento";
+import IAMusical from "./Pages/IAMusical/IAMusical";
+import AppNavigation from "./components/AppNavigation";
+import "./styles/page-theme.css";
 import {
   getUsuarioLogado,
   usuarioEhAdmin,
   usuarioEstaAutenticado,
 } from "./auth";
 
-
-function App() {
-
-  const caminho = window.location.pathname;
-  const idLouvor = new URLSearchParams(
-    window.location.search
-  ).get("id");
-  const usuario = getUsuarioLogado();
-  const rotaPublica =
-    caminho === "/login" ||
-    caminho === "/cadastro";
-
-  if (
-    (!usuario || !usuarioEstaAutenticado()) &&
-    !rotaPublica
-  ) {
-    window.location.replace("/login");
-    return null;
-  }
-
-  if (caminho === "/login") {
-    if (usuario && usuarioEstaAutenticado()) {
-      window.location.replace("/");
-      return null;
-    }
-
-    return <Login />;
-  }
-
-  if (caminho === "/cadastro") {
-    return <Cadastro />;
-  }
-
-
-  // =====================================================
-  // DETALHES DO LOUVOR
-  // =====================================================
-
+function ProtectedRoutes({ caminho, usuario, idLouvor }) {
   if (caminho === "/detalhes-louvor") {
-
     return <DetalhesLouvor />;
-
   }
-
-
-  // =====================================================
-  // LOUVORES
-  // =====================================================
 
   if (caminho === "/louvores") {
-
     return <Louvores />;
-
   }
 
   if (caminho === "/agenda") {
@@ -88,6 +45,10 @@ function App() {
     return <Notificacoes />;
   }
 
+  if (caminho === "/ia-musical") {
+    return <IAMusical />;
+  }
+
   if (caminho === "/equipe") {
     return <Equipe />;
   }
@@ -105,37 +66,63 @@ function App() {
     return <MontarEscala />;
   }
 
+  if (caminho === "/novo-louvor") {
+    return <FormLouvor />;
+  }
 
-  // =====================================================
-  // NOVO / EDITAR LOUVOR
-  // =====================================================
-
-  if (
-    caminho === "/novo-louvor" ||
-    caminho === "/editar-louvor"
-  ) {
+  if (caminho === "/editar-louvor") {
     if (!usuarioEhAdmin(usuario)) {
       window.location.replace("/louvores");
       return null;
     }
 
-    if (caminho === "/editar-louvor" && !idLouvor) {
+    if (!idLouvor) {
       window.location.replace("/louvores");
       return null;
     }
 
     return <FormLouvor />;
-
   }
 
-
-  // =====================================================
-  // DASHBOARD
-  // =====================================================
-
   return <Dashboard />;
-
 }
 
+function App() {
+  const caminho = window.location.pathname;
+  const idLouvor = new URLSearchParams(window.location.search).get("id");
+  const usuario = getUsuarioLogado();
+  const rotaPublica = caminho === "/login" || caminho === "/cadastro";
+
+  if ((!usuario || !usuarioEstaAutenticado()) && !rotaPublica) {
+    window.location.replace("/login");
+    return null;
+  }
+
+  if (caminho === "/login") {
+    if (usuario && usuarioEstaAutenticado()) {
+      window.location.replace("/");
+      return null;
+    }
+
+    return <Login />;
+  }
+
+  if (caminho === "/cadastro") {
+    return <Cadastro />;
+  }
+
+  return (
+    <div className="app-layout">
+      <AppNavigation />
+      <div className="app-layout-content">
+        <ProtectedRoutes
+          caminho={caminho}
+          usuario={usuario}
+          idLouvor={idLouvor}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default App;

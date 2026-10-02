@@ -86,8 +86,38 @@ function Equipe() {
     setErro("");
     setMensagem("");
 
+    const nome = formulario.nome.trim();
+    const sobrenome = formulario.sobrenome.trim();
+    const email = formulario.email.trim();
+    const senha = formulario.senha.trim();
+
+    if (!nome || !sobrenome || !email) {
+      setErro("Preencha nome, sobrenome e e-mail antes de salvar.");
+      setSalvando(false);
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErro("Informe um endereço de e-mail válido.");
+      setSalvando(false);
+      return;
+    }
+
+    if ((!membroEmEdicao || formulario.senha) && senha.length < 6) {
+      setErro("A senha precisa ter pelo menos 6 caracteres.");
+      setSalvando(false);
+      return;
+    }
+
     try {
-      const dados = { ...formulario };
+      const dados = {
+        ...formulario,
+        nome,
+        sobrenome,
+        email,
+        senha,
+        funcao_principal: formulario.funcao_principal.trim(),
+      };
       if (membroEmEdicao && !dados.senha) {
         delete dados.senha;
       }
@@ -161,7 +191,7 @@ function Equipe() {
         </div>
       </header>
 
-      {erro && <p className="equipe-error">{erro}</p>}
+      {erro && !mostrarFormulario && <p className="equipe-error" role="alert">{erro}</p>}
       {mensagem && <p className="equipe-success">{mensagem}</p>}
 
       {mostrarFormulario && (
@@ -175,18 +205,19 @@ function Equipe() {
               Cancelar
             </button>
           </div>
-          <form className="equipe-form" onSubmit={salvarMembro}>
+          <form className="equipe-form" onSubmit={salvarMembro} noValidate>
+            {erro && <p id="equipe-form-error" className="equipe-error" role="alert">{erro}</p>}
             <label>
               Nome
-              <input name="nome" value={formulario.nome} onChange={alterarCampo} required />
+              <input name="nome" value={formulario.nome} onChange={alterarCampo} required aria-describedby={erro ? "equipe-form-error" : undefined} />
             </label>
             <label>
               Sobrenome
-              <input name="sobrenome" value={formulario.sobrenome} onChange={alterarCampo} required />
+              <input name="sobrenome" value={formulario.sobrenome} onChange={alterarCampo} required aria-describedby={erro ? "equipe-form-error" : undefined} />
             </label>
             <label>
               E-mail
-              <input name="email" type="email" value={formulario.email} onChange={alterarCampo} required />
+              <input name="email" type="email" value={formulario.email} onChange={alterarCampo} required aria-describedby={erro ? "equipe-form-error" : undefined} />
             </label>
             <label>
               Função principal
@@ -206,6 +237,7 @@ function Equipe() {
                 value={formulario.senha}
                 onChange={alterarCampo}
                 required={!membroEmEdicao}
+                aria-describedby={erro ? "equipe-form-error" : undefined}
               />
             </label>
             <button className="equipe-primary" type="submit" disabled={salvando}>

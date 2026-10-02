@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../api";
+import "./Louvores.css";
 
 
 function FormLouvor() {
@@ -20,6 +21,7 @@ function FormLouvor() {
 
     titulo: "",
     artista: "",
+    local: "",
     tom: "",
     bpm: "",
     categoria: "",
@@ -32,6 +34,7 @@ function FormLouvor() {
 
 
   const [mensagem, setMensagem] = useState("");
+  const [salvando, setSalvando] = useState(false);
 
   const [carregando, setCarregando] = useState(
     Boolean(editando)
@@ -77,6 +80,7 @@ function FormLouvor() {
 
           titulo: dados.titulo || "",
           artista: dados.artista || "",
+          local: dados.local || "",
           tom: dados.tom || "",
           bpm: dados.bpm || "",
           categoria: dados.categoria || "",
@@ -140,6 +144,19 @@ function FormLouvor() {
 
     setMensagem("");
 
+    const titulo = formulario.titulo.trim();
+    const bpm = formulario.bpm.trim();
+    if (!titulo) {
+      setMensagem("Informe o título do louvor.");
+      return;
+    }
+
+    if (bpm && (!Number.isInteger(Number(bpm)) || Number(bpm) < 1)) {
+      setMensagem("Informe um BPM válido, maior que zero.");
+      return;
+    }
+
+    setSalvando(true);
 
     try {
 
@@ -167,7 +184,17 @@ function FormLouvor() {
           },
 
           body:
-            JSON.stringify(formulario)
+            JSON.stringify({
+              ...formulario,
+              titulo,
+              artista: formulario.artista.trim(),
+              local: formulario.local.trim(),
+              tom: formulario.tom.trim(),
+              bpm,
+              categoria: formulario.categoria.trim(),
+              link: formulario.link.trim(),
+              imagem: formulario.imagem.trim(),
+            })
 
         }
 
@@ -227,6 +254,9 @@ function FormLouvor() {
         "Erro ao conectar com servidor."
       );
 
+    }
+    finally {
+      setSalvando(false);
     }
 
   }
@@ -294,6 +324,7 @@ function FormLouvor() {
 
 
       <form
+        className="form-louvor-fields"
         onSubmit={salvarLouvor}
       >
 
@@ -301,9 +332,8 @@ function FormLouvor() {
         {/* TÍTULO */}
 
         <input
-
           name="titulo"
-
+          aria-label="Título do louvor"
           placeholder="Nome do louvor"
 
           value={
@@ -322,9 +352,8 @@ function FormLouvor() {
         {/* ARTISTA */}
 
         <input
-
           name="artista"
-
+          aria-label="Ministério ou artista"
           placeholder="Ministério / Artista"
 
           value={
@@ -337,13 +366,21 @@ function FormLouvor() {
 
         />
 
+        <input
+          name="local"
+          aria-label="Local do louvor"
+          placeholder="Local (opcional)"
+          maxLength={200}
+          value={formulario.local}
+          onChange={alterarCampo}
+        />
+
 
         {/* TOM */}
 
         <input
-
           name="tom"
-
+          aria-label="Tom da música"
           placeholder="Tom da música"
 
           value={
@@ -360,9 +397,8 @@ function FormLouvor() {
         {/* BPM */}
 
         <input
-
           name="bpm"
-
+          aria-label="BPM"
           type="number"
 
           placeholder="BPM"
@@ -383,9 +419,8 @@ function FormLouvor() {
         {/* CATEGORIA */}
 
         <input
-
           name="categoria"
-
+          aria-label="Categoria"
           placeholder="Categoria"
 
           value={
@@ -402,9 +437,8 @@ function FormLouvor() {
         {/* LETRA */}
 
         <textarea
-
           name="letra"
-
+          aria-label="Letra do louvor"
           placeholder="Letra do louvor"
 
           value={
@@ -421,9 +455,8 @@ function FormLouvor() {
         {/* ESTRUTURA */}
 
         <textarea
-
           name="estrutura_letra"
-
+          aria-label="Estrutura da letra"
           placeholder="Estrutura da letra"
 
           value={
@@ -440,9 +473,8 @@ function FormLouvor() {
         {/* LINK */}
 
         <input
-
           name="link"
-
+          aria-label="Link para ouvir ou consultar o louvor"
           placeholder="Link Spotify, YouTube ou Cifra Club"
 
           value={
@@ -459,9 +491,8 @@ function FormLouvor() {
         {/* IMAGEM */}
 
         <input
-
           name="imagem"
-
+          aria-label="Link da imagem de capa"
           placeholder="Link da imagem"
 
           value={
@@ -479,11 +510,14 @@ function FormLouvor() {
 
         <button
           type="submit"
+          disabled={salvando}
         >
 
-          {editando
-            ? "Salvar alterações"
-            : "Salvar Louvor"}
+          {salvando
+            ? "Salvando..."
+            : editando
+              ? "Salvar alterações"
+              : "Salvar Louvor"}
 
         </button>
 
@@ -495,7 +529,7 @@ function FormLouvor() {
 
       {mensagem && (
 
-        <p>
+        <p role="status" aria-live="polite">
 
           {mensagem}
 

@@ -100,26 +100,32 @@ function FormEvento({
     }));
   }
 
-  function alterarLouvores(event) {
-    const valores = Array.from(
-      event.target.selectedOptions,
-      (option) => Number(option.value)
-    );
+  function alterarLouvor(louvorId, selecionado) {
     setFormulario((anterior) => ({
       ...anterior,
-      louvor_ids: valores,
+      louvor_ids: selecionado
+        ? [...anterior.louvor_ids, louvorId]
+        : anterior.louvor_ids.filter((id) => id !== louvorId),
     }));
   }
 
   async function salvar(event) {
     event.preventDefault();
     setErro("");
+
+    const titulo = formulario.titulo.trim();
+    if (!titulo) {
+      setErro("Informe um nome para o culto ou evento.");
+      return;
+    }
+
     setSalvando(true);
 
     try {
+      const dados = { ...formulario, titulo };
       const resposta = evento
-        ? await api.put(`/api/eventos/${evento.id}`, formulario)
-        : await api.post("/api/eventos", formulario);
+        ? await api.put(`/api/eventos/${evento.id}`, dados)
+        : await api.post("/api/eventos", dados);
 
       onSaved(resposta.data.mensagem);
     } catch (error) {
@@ -136,57 +142,80 @@ function FormEvento({
     <form className="agenda-form" onSubmit={salvar}>
       <h2>{evento ? "Editar evento" : "Novo culto ou evento"}</h2>
 
-      {erro && <p className="agenda-error">{erro}</p>}
+      {erro && <p className="agenda-error" role="alert">{erro}</p>}
 
       <div className="agenda-grid">
-        <input
-          name="titulo"
-          placeholder="Nome do culto ou evento"
-          value={formulario.titulo}
-          onChange={alterarCampo}
-          required
-        />
-        <input
-          name="data"
-          type="date"
-          value={formulario.data}
-          onChange={alterarCampo}
-          required
-        />
-        <input
-          name="hora"
-          type="time"
-          value={formulario.hora}
-          onChange={alterarCampo}
-        />
-        <input
-          name="local"
-          placeholder="Local"
-          value={formulario.local}
-          onChange={alterarCampo}
-        />
+        <label className="agenda-field">
+          Nome do culto ou evento
+          <input
+            name="titulo"
+            placeholder="Ex.: Culto de domingo"
+            value={formulario.titulo}
+            onChange={alterarCampo}
+            required
+          />
+        </label>
+        <label className="agenda-field">
+          Data
+          <input
+            name="data"
+            type="date"
+            value={formulario.data}
+            onChange={alterarCampo}
+            required
+          />
+        </label>
+        <label className="agenda-field">
+          Horário
+          <input
+            name="hora"
+            type="time"
+            value={formulario.hora}
+            onChange={alterarCampo}
+          />
+        </label>
+        <label className="agenda-field">
+          Local
+          <input
+            name="local"
+            placeholder="Endereço ou nome do local"
+            value={formulario.local}
+            onChange={alterarCampo}
+          />
+        </label>
       </div>
 
-      <textarea
-        name="descricao"
-        placeholder="Descrição do evento"
-        value={formulario.descricao}
-        onChange={alterarCampo}
-      />
+      <label className="agenda-field">
+        Descrição
+        <textarea
+          name="descricao"
+          placeholder="Informações adicionais (opcional)"
+          value={formulario.descricao}
+          onChange={alterarCampo}
+        />
+      </label>
 
-      <label htmlFor="agenda-louvores">Louvores do culto</label>
-      <select
-        id="agenda-louvores"
-        multiple
-        value={formulario.louvor_ids.map(String)}
-        onChange={alterarLouvores}
-      >
-        {louvores.map((louvor) => (
-          <option key={louvor.id} value={louvor.id}>
-            {louvor.titulo}
-          </option>
-        ))}
-      </select>
+      <fieldset className="agenda-louvores-field">
+        <legend>Louvores do culto</legend>
+        {louvores.length === 0 ? (
+          <p>Nenhum louvor cadastrado para selecionar.</p>
+        ) : (
+          <div className="agenda-louvores-options">
+            {louvores.map((louvor) => (
+              <label key={louvor.id}>
+                <input
+                  type="checkbox"
+                  checked={formulario.louvor_ids.includes(louvor.id)}
+                  onChange={(event) =>
+                    alterarLouvor(louvor.id, event.target.checked)
+                  }
+                />
+                <span>{louvor.titulo}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </fieldset>
 
       <div className="agenda-members-title">
         <h3>Membros e funções</h3>
@@ -201,6 +230,7 @@ function FormEvento({
           key={`${index}-${membro.usuario_id}`}
         >
           <select
+            aria-label={`Membro da equipe, linha ${index + 1}`}
             value={membro.usuario_id}
             onChange={(event) =>
               alterarMembro(index, "usuario_id", event.target.value)
@@ -215,6 +245,7 @@ function FormEvento({
             ))}
           </select>
           <select
+            aria-label={`Função do membro, linha ${index + 1}`}
             value={membro.funcao}
             onChange={(event) =>
               alterarMembro(index, "funcao", event.target.value)

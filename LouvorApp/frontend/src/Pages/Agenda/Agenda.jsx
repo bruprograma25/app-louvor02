@@ -21,8 +21,11 @@ function Agenda() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [eventoEmEdicao, setEventoEmEdicao] = useState(null);
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const eventoQuery = new URLSearchParams(window.location.search).get("editar");
+  const parametros = new URLSearchParams(window.location.search);
+  const eventoQuery = parametros.get("editar");
+  const [mostrarFormulario, setMostrarFormulario] = useState(
+    () => ehAdmin && parametros.get("novo") === "1"
+  );
 
   function formatarData(data) {
     if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
@@ -151,17 +154,23 @@ function Agenda() {
           </p>
         </div>
         <div className="agenda-header-actions">
-          {ehAdmin && (
-            <button
-              className="agenda-primary"
-              type="button"
-              onClick={abrirNovoEvento}
-            >
-              + Novo evento
-            </button>
+          <button
+            className="agenda-primary"
+            type="button"
+            onClick={ehAdmin ? abrirNovoEvento : undefined}
+            disabled={!ehAdmin}
+            title={!ehAdmin ? "Somente administradores podem criar eventos." : undefined}
+          >
+            + Adicionar evento
+          </button>
+          {!ehAdmin && (
+            <span className="agenda-permission-note">
+              Disponível para administradores. Você está conectado como membro.
+            </span>
           )}
           {!ehAdmin && (
             <button
+              className="agenda-secondary"
               type="button"
               onClick={() => { window.location.href = "/minha-agenda"; }}
             >
@@ -217,14 +226,36 @@ function Agenda() {
             </div>
             {culto.descricao && <p>{culto.descricao}</p>}
             <h4>Escala</h4>
-            <ul>
+            <ul className="agenda-members">
               {culto.membros.map((membro) => (
-                <li key={`${culto.id}-${membro.id}`}>
-                  {membro.nome} — {membro.funcao}
-                  {" · "}
-                  {STATUS_ESCALA[membro.status] ||
-                    (membro.confirmado ? "confirmou" : "aguardando resposta")}
-                  {membro.troca_para && ` com ${membro.troca_para.nome}`}
+                <li className="agenda-member" key={`${culto.id}-${membro.id}`}>
+                  <span className="agenda-member-name">{membro.nome}</span>
+                  <span className="agenda-member-role">
+                    {membro.funcao || "Função não informada"}
+                  </span>
+                  {(() => {
+                    const status = Object.hasOwn(STATUS_ESCALA, membro.status)
+                      ? membro.status
+                      : membro.confirmado
+                        ? "confirmado"
+                        : "pendente";
+                    const confirmado = status === "confirmado";
+
+                    return (
+                      <span
+                        className={`agenda-status agenda-status--${status}`}
+                        aria-label={`Confirmação: ${STATUS_ESCALA[status]}`}
+                      >
+                        {confirmado ? "✓ " : ""}
+                        {STATUS_ESCALA[status]}
+                      </span>
+                    );
+                  })()}
+                  {membro.troca_para && (
+                    <span className="agenda-member-change">
+                      Troca com {membro.troca_para.nome}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -242,15 +273,16 @@ function Agenda() {
                 >
                   Ver detalhes
                 </button>
-                <button type="button" onClick={() => editarEvento(culto)}>✏️ Editar</button>
+                <button className="agenda-secondary" type="button" onClick={() => editarEvento(culto)}>✏️ Editar</button>
                 <button
+                  className="agenda-secondary"
                   type="button"
                   onClick={() => { window.location.href = `/montar-escala?evento=${culto.id}`; }}
                 >
                   👥 Montar escala
                 </button>
-                {!culto.publicado && <button type="button" onClick={() => publicarCulto(culto.id)}>📢 Publicar escala</button>}
-                <button type="button" onClick={() => excluirCulto(culto.id)}>🗑 Excluir</button>
+                {!culto.publicado && <button className="agenda-primary" type="button" onClick={() => publicarCulto(culto.id)}>📢 Publicar escala</button>}
+                <button className="agenda-danger" type="button" onClick={() => excluirCulto(culto.id)}>🗑 Excluir</button>
               </div>
             )}
             {!ehAdmin &&
@@ -263,6 +295,7 @@ function Agenda() {
                   membro.confirmado
               ) && (
                 <button
+                  className="agenda-primary"
                   type="button"
                   onClick={() => confirmarEscala(culto.id)}
                 >
@@ -271,6 +304,7 @@ function Agenda() {
               )}
             {!ehAdmin && (
               <button
+                className="agenda-secondary"
                 type="button"
                 onClick={() => { window.location.href = `/detalhes-evento?id=${culto.id}`; }}
               >

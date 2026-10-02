@@ -26,6 +26,20 @@ function Cadastro() {
     setMensagem("");
     setErro("");
 
+    const nome = formulario.nome.trim();
+    const sobrenome = formulario.sobrenome.trim();
+    const email = formulario.email.trim().toLowerCase();
+
+    if (!nome || !sobrenome || !email) {
+      setErro("Preencha nome, sobrenome e e-mail.");
+      return;
+    }
+
+    if (formulario.senha.length < 6) {
+      setErro("A senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+
     if (formulario.senha !== formulario.confirmarSenha) {
       setErro("As senhas não são iguais.");
       return;
@@ -35,7 +49,7 @@ function Cadastro() {
       setCarregando(true);
       const resposta = await api.post(
         "/api/cadastro",
-        formulario
+        { nome, sobrenome, email, senha: formulario.senha }
       );
 
       setMensagem(resposta.data.mensagem);
@@ -79,17 +93,33 @@ function Cadastro() {
                 <input
                   id={campo}
                   name={campo}
-                  type={campo === "email" ? "email" : campo.includes("senha") ? "password" : "text"}
+                  type={
+                    campo === "email"
+                      ? "email"
+                      : campo === "senha" || campo === "confirmarSenha"
+                        ? "password"
+                        : "text"
+                  }
                   value={formulario[campo]}
                   onChange={alterarCampo}
                   required
+                  minLength={campo === "senha" || campo === "confirmarSenha" ? 6 : undefined}
+                  autoComplete={{
+                    nome: "given-name",
+                    sobrenome: "family-name",
+                    email: "email",
+                    senha: "new-password",
+                    confirmarSenha: "new-password",
+                  }[campo]}
+                  aria-invalid={Boolean(erro)}
+                  aria-describedby={erro ? "cadastro-error" : undefined}
                 />
               </div>
             )
           )}
 
-          {erro && <div className="mensagem-erro">{erro}</div>}
-          {mensagem && <div className="mensagem-sucesso">{mensagem}</div>}
+          {erro && <div id="cadastro-error" className="mensagem-erro" role="alert">{erro}</div>}
+          {mensagem && <div className="mensagem-sucesso" role="status">{mensagem}</div>}
 
           <button type="submit" className="btn-login" disabled={carregando}>
             {carregando ? "Cadastrando..." : "Cadastrar"}
