@@ -47,12 +47,55 @@ Run the isolated regression suite from this directory:
 .\venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
+## Music assistant and song folders
+
+The musical assistant is available to every authenticated account. It answers
+common questions locally about BPM, keys, chords, chord notation, time
+signatures, song sections, rehearsal, and preparing a ministration. When a
+question asks for facts about a registered song, the response uses the
+authenticated user's accessible catalog and reports missing fields instead of
+guessing. General open-ended questions use the configured AI provider when
+available. Only song metadata and recognized section labels are sent to that
+provider; lyrics, passwords, and tokens are not included.
+
+Each newly added song belongs to its creator's private folder. Members can
+list, view, edit, and remove only their own songs; administrators can access
+all folders and filter the team catalog by owner. Songs selected by an
+administrator in an event's repertoire are linked to that ministration. Older
+unowned songs remain visible to administrators as the legacy collection.
+SQLite development startup adds the ownership column automatically. Production
+databases receive it through Alembic migration `0003_private_song_folders`.
+Existing songs are not assigned to a member automatically.
+
+## Online audio/video meetings
+
+The authenticated `/reunioes` page creates a random room code or joins an
+existing one. Any authenticated user with the code can join. The backend
+validates room names and mints a four-hour, room-scoped LiveKit token; the
+LiveKit API secret is never sent to the browser. Audio, video, screen sharing,
+participant paging, and in-room chat use the LiveKit React components.
+
+Create a LiveKit Cloud project and configure these backend secrets (also
+available as blank entries in `.env.example`):
+
+| Variable | Value |
+| --- | --- |
+| `LIVEKIT_URL` | Project WebSocket URL, for example `wss://<project>.livekit.cloud` |
+| `LIVEKIT_API_KEY` | Project API key |
+| `LIVEKIT_API_SECRET` | Project API secret; backend only |
+
+Set `LIVEKIT_URL` to `wss://` in production. Serve the frontend over HTTPS so
+browsers allow microphone and camera access. LiveKit Cloud participant limits,
+regional networking, and bandwidth depend on the selected account plan; load
+test the provisioned project for the expected 40+ participants. The app cannot
+guarantee availability when the network or media provider is unavailable.
+
 Unauthenticated access is limited to `POST /api/cadastro` and `POST
 /api/login`. Other API routes require a bearer JWT. Administrative operations
-check the current database role; members can create songs, while editing or
-deleting songs, managing events and schedules, and publishing team-wide notices
-remain administrator-only. Members can access only their own private schedule
-and notifications. Debug mode must remain disabled outside local development.
+check the current database role; members can manage songs in their own folders,
+while managing events and schedules and publishing team-wide notices remain
+administrator-only. Members can access only their own private schedule and
+notifications. Debug mode must remain disabled outside local development.
 
 Administrators can publish team-wide notices from the notifications page;
 notices can include a location. Song records also support an optional location,

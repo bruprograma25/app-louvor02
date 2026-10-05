@@ -5,7 +5,8 @@ import { getUsuarioLogado, usuarioEhAdmin } from "../../auth";
 import { api } from "../../api";
 
 function DetalhesLouvor() {
-  const ehAdmin = usuarioEhAdmin(getUsuarioLogado());
+  const usuario = getUsuarioLogado();
+  const ehAdmin = usuarioEhAdmin(usuario);
   const [louvor, setLouvor] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -457,7 +458,7 @@ function DetalhesLouvor() {
           ← Voltar
         </button>
 
-        {ehAdmin && (
+        {(ehAdmin || louvor.dono_id === usuario?.id) && (
           <button
             type="button"
             className="delete-button"

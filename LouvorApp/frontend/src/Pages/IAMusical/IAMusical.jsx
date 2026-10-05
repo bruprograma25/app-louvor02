@@ -7,14 +7,19 @@ import "./IAMusical.css";
 
 const BOAS_VINDAS = {
   role: "assistant",
-  content: "Olá! Posso ajudar com teoria musical, tons, acordes, BPM e estrutura das músicas. Também posso procurar informações nos louvores cadastrados. O que você gostaria de aprender?",
+  content: "Olá! Posso explicar BPM, tonalidade, acordes, cifras, compassos e as seções das músicas; também ajudo você a estudar e preparar uma ministração. Posso consultar os dados dos louvores disponíveis na sua pasta. O que você gostaria de aprender?",
 };
 
 const SUGESTOES = [
-  "Como encontro o tom de uma música?",
-  "Qual é a diferença entre verso, refrão e ponte?",
   "O que significa BPM?",
-  "Como funciona um acorde menor?",
+  "O que significa 4/4?",
+  "Como ler uma cifra?",
+  "O que é pré-refrão?",
+  "Qual é a função da ponte?",
+  "O que é o outro de uma música?",
+  "Como estudar uma música para ministrar?",
+  "Como encontro o tom de uma música?",
+  "Qual é a diferença entre verso e refrão?",
 ];
 
 function IAMusical() {
@@ -106,6 +111,7 @@ function IAMusical() {
           content: resposta.data.resposta,
           louvores: resposta.data.louvores_consultados || [],
           modo: resposta.data.modo || "ia",
+          aviso: resposta.data.aviso || "",
         },
       ]);
     } catch (error) {
@@ -286,8 +292,8 @@ function IAMusical() {
           <span className="ia-musical-eyebrow">Seu parceiro de música</span>
           <h1>Assistente Musical</h1>
           <p>
-            Tire dúvidas musicais e encontre informações nos louvores
-            cadastrados.
+            Aprenda conceitos musicais, prepare suas músicas e consulte os
+            louvores disponíveis para sua conta.
           </p>
           <p
             className={`ia-musical-provider-status ${
@@ -301,7 +307,7 @@ function IAMusical() {
               (statusIa?.provedor_configurado
                 ? "Serviço de IA configurado no backend."
                 : statusIa
-                  ? "IA externa não configurada: respostas locais limitadas estão ativas. Configure AI_API_KEY no backend para respostas abertas."
+                  ? "Sem IA externa: respostas automáticas locais para conceitos musicais comuns. Configure AI_API_KEY no backend para perguntas abertas."
                   : "Verificando serviço de IA...")}
           </p>
         </div>
@@ -341,7 +347,7 @@ function IAMusical() {
               )}
               {mensagem.louvores?.length > 0 && (
                 <div className="ia-musical-sources">
-                  <strong>Louvores encontrados no catálogo</strong>
+                  <strong>Louvores encontrados nas pastas disponíveis</strong>
                   <ul>
                     {mensagem.louvores.map((louvor) => (
                       <li key={`${index}-${louvor.titulo}`}>
@@ -349,6 +355,9 @@ function IAMusical() {
                         {louvor.artista && <span> · {louvor.artista}</span>}
                         {louvor.tom && <span> · Tom {louvor.tom}</span>}
                         {louvor.bpm && <span> · {louvor.bpm} BPM</span>}
+                        {louvor.estrutura?.length > 0 && (
+                          <span> · {louvor.estrutura.join(" → ")}</span>
+                        )}
                       </li>
                     ))}
                   </ul>

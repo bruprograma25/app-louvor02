@@ -181,6 +181,13 @@ class Louvor(db.Model):
         default=utcnow_naive
     )
 
+    dono_id = db.Column(
+        db.Integer,
+        db.ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # =====================================================
     # CONVERTER PARA JSON
     # =====================================================
@@ -211,6 +218,8 @@ class Louvor(db.Model):
             "link": self.link,
 
             "imagem": self.imagem,
+
+            "dono_id": self.dono_id,
 
             "criado_em": (
                 self.criado_em.isoformat()

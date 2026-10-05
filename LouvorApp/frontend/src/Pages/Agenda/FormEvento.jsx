@@ -119,6 +119,25 @@ function FormEvento({
       return;
     }
 
+    const membrosDuplicados = formulario.membros.some(
+      (membro, index) =>
+        membro.usuario_id &&
+        formulario.membros.some(
+          (outroMembro, outroIndex) =>
+            outroIndex !== index &&
+            outroMembro.usuario_id === membro.usuario_id
+        )
+    );
+    if (membrosDuplicados) {
+      setErro("Cada membro pode ocupar apenas uma função nesta escala.");
+      return;
+    }
+
+    if (formulario.membros.some((membro) => !membro.usuario_id || !membro.funcao)) {
+      setErro("Selecione um membro e uma função para cada linha da escala.");
+      return;
+    }
+
     setSalvando(true);
 
     try {
@@ -150,6 +169,7 @@ function FormEvento({
           <input
             name="titulo"
             placeholder="Ex.: Culto de domingo"
+            maxLength={160}
             value={formulario.titulo}
             onChange={alterarCampo}
             required
@@ -179,6 +199,7 @@ function FormEvento({
           <input
             name="local"
             placeholder="Endereço ou nome do local"
+            maxLength={200}
             value={formulario.local}
             onChange={alterarCampo}
           />
@@ -190,6 +211,7 @@ function FormEvento({
         <textarea
           name="descricao"
           placeholder="Informações adicionais (opcional)"
+          maxLength={2000}
           value={formulario.descricao}
           onChange={alterarCampo}
         />
@@ -210,7 +232,10 @@ function FormEvento({
                     alterarLouvor(louvor.id, event.target.checked)
                   }
                 />
-                <span>{louvor.titulo}</span>
+                <span>
+                  {louvor.titulo}
+                  {louvor.dono_nome && ` · Pasta: ${louvor.dono_nome}`}
+                </span>
               </label>
             ))}
           </div>
@@ -239,7 +264,15 @@ function FormEvento({
           >
             <option value="">Selecione o membro</option>
             {membros.map((item) => (
-              <option key={item.id} value={item.id}>
+              <option
+                key={item.id}
+                value={item.id}
+                disabled={formulario.membros.some(
+                  (outroMembro, outroIndex) =>
+                    outroIndex !== index &&
+                    outroMembro.usuario_id === String(item.id)
+                )}
+              >
                 {item.nome} ({item.email})
               </option>
             ))}

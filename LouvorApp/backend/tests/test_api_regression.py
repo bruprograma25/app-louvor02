@@ -241,11 +241,17 @@ class ApiRegressionTests(unittest.TestCase):
     def test_musical_assistant_local_answers_music_topics_without_catalog_matches(self):
         questions = {
             "O que é uma ponte?": "seção de contraste",
-            "Qual a diferença de refrão e verso?": "parte principal",
+            "Qual a diferença de refrão e verso?": "seção recorrente",
             "O que é um acorde menor?": "terça menor",
             "Como transpor uma música?": "Transpor é mover",
             "O que é uma introdução?": "trecho inicial",
-            "Como identificar o tom?": "O tom indica",
+            "Como identificar o tom?": "Tonalidade é",
+            "O que é uma cifra?": "Cifra é uma forma abreviada",
+            "O que significa compasso 4/4?": "Compasso organiza",
+            "O que é pré-refrão?": "seção opcional",
+            "O que é o outro?": "seção de encerramento",
+            "Como estudar uma música para ministrar?": "Roteiro prático de estudo",
+            "O que é a estrutura de uma música?": "A estrutura é a ordem",
         }
         with patch.dict(os.environ, {"AI_API_KEY": ""}):
             for pergunta, fragmento in questions.items():
@@ -350,6 +356,10 @@ class ApiRegressionTests(unittest.TestCase):
                 bpm=98,
                 categoria="Adoração",
                 letra="Esta letra não deve ser enviada ao provedor.",
+                estrutura_letra=(
+                    "[Intro] -> [Verso 1]\n"
+                    "Letra da estrutura que também não deve ser enviada."
+                ),
             ))
             db.session.commit()
 
@@ -372,15 +382,12 @@ class ApiRegressionTests(unittest.TestCase):
                 headers=self.admin_headers,
                 json={"mensagens": [{
                     "role": "user",
-                    "content": "Qual é o tom do louvor Caminho de Luz?",
+                    "content": "Como organizar um ensaio para Caminho de Luz?",
                 }]},
             )
 
         self.assertEqual(response.status_code, 200, response.get_json())
-        self.assertEqual(
-            response.get_json()["resposta"],
-            "O louvor está cadastrado em G, a 98 BPM.",
-        )
+        self.assertEqual(response.get_json()["modo"], "ia")
         self.assertEqual(
             response.get_json()["louvores_consultados"][0]["titulo"],
             "Caminho de Luz",
@@ -395,6 +402,194 @@ class ApiRegressionTests(unittest.TestCase):
         self.assertIn('"store": false', texto_enviado)
         self.assertIn("Caminho de Luz", texto_enviado)
         self.assertNotIn("Esta letra não deve ser enviada", texto_enviado)
+        self.assertNotIn(
+            "Letra da estrutura que também não deve ser enviada",
+            texto_enviado,
+        )
+        self.assertIn("Introdução", texto_enviado)
+        self.assertIn("Verso", texto_enviado)
+
+    def test_livekit_room_tokens_are_authenticated_scoped_and_temporary(self):
+        member_id = self._cadastrar_membro("Membro", "meeting@example.invalid")
+        member_headers = self._login(
+            "meeting@example.invalid",
+            "member-password-123",
+        )
+        secret = "livekit-private-signing-secret-for-tests"
+        with patch.dict(os.environ, {
+            "LIVEKIT_URL": "wss://example.livekit.cloud",
+            "LIVEKIT_API_KEY": "test-api-key",
+            "LIVEKIT_API_SECRET": secret,
+        }):
+            status = self.client.get(
+                "/api/reunioes/status",
+                headers=member_headers,
+            )
+            response = self.client.post(
+                "/api/reunioes/token",
+                headers=member_headers,
+                json={"room_name": "louvor-equipe-123"},
+            )
+
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(status.get_json(), {"disponivel": True})
+        self.assertNotIn(secret, status.get_data(as_text=True))
+        self.assertEqual(response.status_code, 200, response.get_json())
+        dados = response.get_json()
+        self.assertEqual(dados["server_url"], "wss://example.livekit.cloud")
+        self.assertNotIn(secret, response.get_data(as_text=True))
+        claims = jwt.decode(
+            dados["token"],
+            secret,
+            algorithms=["HS256"],
+            options={"verify_exp": False},
+        )
+        self.assertEqual(claims["iss"], "test-api-key")
+        self.assertEqual(claims["name"], "Membro")
+        self.assertEqual(claims["video"]["room"], "louvor-equipe-123")
+        self.assertTrue(claims["video"]["roomJoin"])
+        self.assertTrue(claims["video"]["canPublish"])
+        self.assertTrue(claims["video"]["canSubscribe"])
+        self.assertTrue(claims["sub"].startswith(f"usuario-{member_id}-"))
+        self.assertGreater(claims["exp"] - claims["iat"], 3 * 60 * 60)
+        self.assertLessEqual(claims["exp"] - claims["iat"], 4 * 60 * 60 + 10)
+
+    def test_livekit_tokens_reject_invalid_rooms_and_insecure_production_urls(self):
+        invalid_rooms = ("", "ab", "has space", "../private", "x" * 65)
+        for room_name in invalid_rooms:
+            with self.subTest(room_name=room_name):
+                response = self.client.post(
+                    "/api/reunioes/token",
+                    headers=self.admin_headers,
+                    json={"room_name": room_name},
+                )
+                self.assertEqual(response.status_code, 400)
+
+        with patch.dict(os.environ, {
+            "APP_ENV": "production",
+            "LIVEKIT_URL": "ws://meeting.example.invalid",
+            "LIVEKIT_API_KEY": "test-api-key",
+            "LIVEKIT_API_SECRET": "livekit-private-signing-secret-for-tests",
+        }):
+            response = self.client.post(
+                "/api/reunioes/token",
+                headers=self.admin_headers,
+                json={"room_name": "secure-room"},
+            )
+        self.assertEqual(response.status_code, 503)
+
+    def test_song_specific_answers_use_database_facts_without_guessing(self):
+        song_id = self._cadastrar_louvor("Canção para Ministrar")
+        with app.app_context():
+            song = db.session.get(Louvor, song_id)
+            song.artista = "Ministério Exemplo"
+            song.tom = "D"
+            song.bpm = 92
+            song.estrutura_letra = "[Intro] → [Verso] → [Pré-refrão] → [Ponte] → [Outro]"
+            db.session.commit()
+
+        with (
+            patch.dict(os.environ, {"AI_API_KEY": "should-not-be-called"}),
+            patch("app.urlopen") as chamada,
+        ):
+            response = self.client.post(
+                "/api/ia-musical/conversar",
+                headers=self.admin_headers,
+                json={"mensagens": [{
+                    "role": "user",
+                    "content": "Qual o tom, BPM e estrutura de Canção para Ministrar?",
+                }]},
+            )
+            missing = self.client.post(
+                "/api/ia-musical/conversar",
+                headers=self.admin_headers,
+                json={"mensagens": [{
+                    "role": "user",
+                    "content": "Qual o BPM do louvor que não está cadastrado?",
+                }]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["modo"], "local")
+        answer = response.get_json()["resposta"]
+        self.assertIn("tom: D", answer)
+        self.assertIn("BPM: 92", answer)
+        self.assertIn("Introdução → Verso → Pré-refrão → Ponte → Outro", answer)
+        self.assertEqual(missing.status_code, 200)
+        self.assertIn("Não encontrei essa música", missing.get_json()["resposta"])
+        self.assertNotIn("92", missing.get_json()["resposta"])
+        chamada.assert_not_called()
+
+    def test_song_folders_are_private_and_available_for_event_selection(self):
+        member_a_id = self._cadastrar_membro("Ana", "ana-folder@example.invalid")
+        member_b_id = self._cadastrar_membro("Bia", "bia-folder@example.invalid")
+        member_a = self._login("ana-folder@example.invalid", "member-password-123")
+        member_b = self._login("bia-folder@example.invalid", "member-password-123")
+
+        song_a = self.client.post(
+            "/api/louvores",
+            headers=member_a,
+            json={"titulo": "Louvor Privado da Ana", "tom": "A"},
+        ).get_json()["louvor"]
+        song_b = self.client.post(
+            "/api/louvores",
+            headers=member_b,
+            json={"titulo": "Louvor Privado da Bia", "tom": "E"},
+        ).get_json()["louvor"]
+
+        self.assertEqual(song_a["dono_id"], member_a_id)
+        self.assertEqual(song_b["dono_id"], member_b_id)
+        self.assertEqual(
+            [item["id"] for item in self.client.get(
+                "/api/louvores", headers=member_a
+            ).get_json()],
+            [song_a["id"]],
+        )
+        todas_pastas = self.client.get(
+            "/api/louvores",
+            headers=self.admin_headers,
+        ).get_json()
+        pastas_por_id = {item["id"]: item["dono_nome"] for item in todas_pastas}
+        self.assertEqual(pastas_por_id[song_a["id"]], "Ana Membro")
+        self.assertEqual(pastas_por_id[song_b["id"]], "Bia Membro")
+        self.assertEqual(
+            self.client.get(
+                f"/api/louvores/{song_b['id']}",
+                headers=member_a,
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/api/louvores/{song_a['id']}",
+                headers=self.admin_headers,
+            ).status_code,
+            200,
+        )
+
+        event_id = self._criar_evento(louvores=[song_b["id"]])
+        with app.app_context():
+            vinculo = CultoLouvor.query.filter_by(
+                culto_id=event_id,
+                louvor_id=song_b["id"],
+            ).first()
+            self.assertIsNotNone(vinculo)
+
+        with patch.dict(os.environ, {"AI_API_KEY": ""}):
+            assistant_response = self.client.post(
+                "/api/ia-musical/conversar",
+                headers=member_a,
+                json={"mensagens": [{
+                    "role": "user",
+                    "content": "Qual o tom do louvor Louvor Privado da Bia?",
+                }]},
+            )
+        self.assertEqual(assistant_response.status_code, 200)
+        self.assertEqual(assistant_response.get_json()["louvores_consultados"], [])
+        self.assertNotIn(
+            "Louvor Privado da Bia",
+            assistant_response.get_json()["resposta"],
+        )
 
     def test_musical_assistant_does_not_expose_provider_failures_or_secret(self):
         with (
@@ -748,7 +943,7 @@ class ApiRegressionTests(unittest.TestCase):
             200,
         )
 
-    def test_members_can_create_songs_but_not_manage_them_or_events(self):
+    def test_members_can_manage_own_songs_but_not_other_folders_or_events(self):
         member_id = self._cadastrar_membro("Alice", "alice@example.invalid")
         member_headers = self._login(
             "alice@example.invalid", "member-password-123"
@@ -760,9 +955,16 @@ class ApiRegressionTests(unittest.TestCase):
         )
         self.assertEqual(song.status_code, 201, song.get_json())
         song_id = song.get_json()["louvor"]["id"]
+        self._cadastrar_membro("Other", "other-member@example.invalid")
+        other_headers = self._login(
+            "other-member@example.invalid", "member-password-123"
+        )
+        other_song = self.client.post(
+            "/api/louvores",
+            json={"titulo": "Louvor de outra pasta"},
+            headers=other_headers,
+        ).get_json()["louvor"]
         endpoints = (
-            ("PUT", f"/api/louvores/{song_id}", {"titulo": "Forbidden"}),
-            ("DELETE", f"/api/louvores/{song_id}", None),
             ("GET", "/api/agenda/membros", None),
             ("POST", "/api/membros", {}),
             ("PUT", f"/api/membros/{member_id}", {}),
@@ -787,6 +989,35 @@ class ApiRegressionTests(unittest.TestCase):
                     headers=member_headers,
                 )
                 self.assertEqual(resposta.status_code, 403)
+
+        self.assertEqual(
+            self.client.put(
+                f"/api/louvores/{song_id}",
+                headers=member_headers,
+                json={"titulo": "Louvor atualizado por Alice"},
+            ).status_code,
+            200,
+        )
+        for method, body in (
+            ("GET", None),
+            ("PUT", {"titulo": "Tentativa de alteração"}),
+            ("DELETE", None),
+        ):
+            with self.subTest(method=method, foreign_song=other_song["id"]):
+                resposta = self.client.open(
+                    f"/api/louvores/{other_song['id']}",
+                    method=method,
+                    json=body,
+                    headers=member_headers,
+                )
+                self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(
+            self.client.delete(
+                f"/api/louvores/{song_id}",
+                headers=member_headers,
+            ).status_code,
+            200,
+        )
 
     def test_song_validation_crud_and_password_privacy(self):
         member_id = self._cadastrar_membro("Bob", "bob@example.invalid")

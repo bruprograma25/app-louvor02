@@ -6,7 +6,10 @@ import { apiFetch } from "../../api";
 
 
 function Louvores() {
-  const ehAdmin = usuarioEhAdmin(getUsuarioLogado());
+  const usuario = getUsuarioLogado();
+  const ehAdmin = usuarioEhAdmin(usuario);
+  const podeGerenciarLouvor = (louvor) =>
+    ehAdmin || louvor.dono_id === usuario?.id;
 
   const [louvores, setLouvores] =
     useState([]);
@@ -19,11 +22,23 @@ function Louvores() {
 
   const [termoPesquisa, setTermoPesquisa] = useState("");
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("");
+  const [pastaSelecionada, setPastaSelecionada] = useState("");
 
   const categorias = useMemo(
     () =>
       [...new Set(louvores.map((louvor) => louvor.categoria?.trim()).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [louvores]
+  );
+  const pastas = useMemo(
+    () => [
+      ...new Map(
+        louvores.map((louvor) => [
+          String(louvor.dono_id ?? "legado"),
+          louvor.dono_nome || "Acervo anterior",
+        ])
+      ),
+    ],
     [louvores]
   );
 
@@ -41,10 +56,12 @@ function Louvores() {
 
       return (
         correspondePesquisa &&
-        (!categoriaSelecionada || louvor.categoria === categoriaSelecionada)
+        (!categoriaSelecionada || louvor.categoria === categoriaSelecionada) &&
+        (!ehAdmin || !pastaSelecionada ||
+          String(louvor.dono_id ?? "legado") === pastaSelecionada)
       );
     });
-  }, [categoriaSelecionada, louvores, termoPesquisa]);
+  }, [categoriaSelecionada, ehAdmin, louvores, pastaSelecionada, termoPesquisa]);
 
 
   // =====================================================
@@ -260,12 +277,14 @@ function Louvores() {
 
 
           <h1>
-            Meus Louvores
+            {ehAdmin ? "Louvores da equipe" : "Meus Louvores"}
           </h1>
 
 
           <p>
-            Gerencie os louvores da sua equipe.
+            {ehAdmin
+              ? "Acesso administrativo a todas as pastas de louvores."
+              : "Pasta privada: somente você e os administradores podem acessar seus louvores."}
           </p>
 
         </div>
@@ -435,6 +454,20 @@ function Louvores() {
                     ))}
                   </select>
                 </label>
+                {ehAdmin && (
+                  <label className="louvores-categoria">
+                    <span>Pasta do ministro</span>
+                    <select
+                      value={pastaSelecionada}
+                      onChange={(event) => setPastaSelecionada(event.target.value)}
+                    >
+                      <option value="">Todas as pastas</option>
+                      {pastas.map(([id, nome]) => (
+                        <option key={id} value={id}>{nome}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <p className="louvores-contagem" aria-live="polite">
                   {louvoresFiltrados.length} de {louvores.length} louvores
                 </p>
@@ -451,6 +484,7 @@ function Louvores() {
                     onClick={() => {
                       setTermoPesquisa("");
                       setCategoriaSelecionada("");
+                      setPastaSelecionada("");
                     }}
                   >
                     Limpar filtros
@@ -574,6 +608,11 @@ function Louvores() {
                         className="louvor-actions"
                       >
 
+                        {ehAdmin && louvor.dono_nome && (
+                          <span className="louvor-owner">
+                            Pasta: {louvor.dono_nome}
+                          </span>
+                        )}
 
                         <button
                           className="link-button"
@@ -589,7 +628,7 @@ function Louvores() {
                         </button>
 
 
-                        {ehAdmin && (
+                        {podeGerenciarLouvor(louvor) && (
                           <button
                             className="link-button"
                             onClick={() =>
@@ -619,7 +658,7 @@ function Louvores() {
                         )}
 
 
-                        {ehAdmin && (
+                        {podeGerenciarLouvor(louvor) && (
                           <button
                             className="delete-button"
                             onClick={() =>

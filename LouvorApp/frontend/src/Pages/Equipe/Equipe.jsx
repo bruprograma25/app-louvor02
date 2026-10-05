@@ -10,6 +10,7 @@ function Equipe() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [mensagem, setMensagem] = useState("");
+  const [termoPesquisa, setTermoPesquisa] = useState("");
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [membroEmEdicao, setMembroEmEdicao] = useState(null);
   const [salvando, setSalvando] = useState(false);
@@ -20,6 +21,17 @@ function Equipe() {
     senha: "",
     funcao_principal: "",
   });
+  const membrosFiltrados = membros.filter((membro) =>
+    [
+      membro.nome,
+      membro.email,
+      membro.funcao_principal,
+    ].some((valor) =>
+      valor?.toLocaleLowerCase("pt-BR").includes(
+        termoPesquisa.trim().toLocaleLowerCase("pt-BR")
+      )
+    )
+  );
 
   const carregarMembros = useCallback(async () => {
     try {
@@ -253,16 +265,33 @@ function Equipe() {
             <span>Cadastro</span>
             <h2>Equipe de louvor</h2>
           </div>
-          {!carregando && <strong>{membros.length} membro{membros.length === 1 ? "" : "s"}</strong>}
+          {!carregando && (
+            <strong aria-live="polite">
+              {membrosFiltrados.length} de {membros.length} membro{membros.length === 1 ? "" : "s"}
+            </strong>
+          )}
         </div>
+
+        <label className="equipe-pesquisa">
+          <span>Pesquisar equipe</span>
+          <input
+            type="search"
+            value={termoPesquisa}
+            onChange={(event) => setTermoPesquisa(event.target.value)}
+            placeholder="Nome, e-mail ou função"
+          />
+        </label>
 
         {carregando && <p>Carregando membros...</p>}
         {!carregando && !erro && membros.length === 0 && (
           <p className="equipe-empty">Nenhum membro cadastrado.</p>
         )}
-        {!carregando && membros.length > 0 && (
+        {!carregando && membros.length > 0 && membrosFiltrados.length === 0 && (
+          <p className="equipe-empty">Nenhum membro corresponde à pesquisa.</p>
+        )}
+        {!carregando && membrosFiltrados.length > 0 && (
           <div className="equipe-lista">
-            {membros.map((membro) => (
+            {membrosFiltrados.map((membro) => (
               <article className="equipe-card" key={membro.id}>
                 <div className="equipe-avatar">
                   {(membro.nome || "M").charAt(0).toUpperCase()}
@@ -271,10 +300,16 @@ function Equipe() {
                   <h3>{membro.nome}</h3>
                   <p>{membro.email}</p>
                   {membro.funcao_principal && (
-                    <small>Função: {membro.funcao_principal}</small>
+                    <span className="equipe-funcao">
+                      Função: {membro.funcao_principal}
+                    </span>
                   )}
                 </div>
-                <span className="equipe-status">Membro</span>
+                <span className="equipe-status">
+                  {membro.tipo_usuario?.toLowerCase() === "admin"
+                    ? "Administrador"
+                    : "Membro"}
+                </span>
                 <div className="equipe-card-actions">
                   <button type="button" onClick={() => editarMembro(membro)}>
                     Editar

@@ -1,16 +1,4 @@
-import Dashboard from "./Pages/dashboard/dashboard";
-import Cadastro from "./Pages/Login/Cadastro";
-import Login from "./Pages/Login/login";
-import Louvores from "./Pages/Louvores/Louvores";
-import FormLouvor from "./Pages/Louvores/FormLouvor";
-import DetalhesLouvor from "./Pages/Louvores/DetalhesLouvor";
-import Agenda from "./Pages/Agenda/Agenda";
-import MontarEscala from "./Pages/Agenda/montarescala";
-import MinhaAgenda from "./Pages/Agenda/MinhaAgenda";
-import Notificacoes from "./Pages/Notificacoes/Notificacoes";
-import Equipe from "./Pages/Equipe/Equipe";
-import DetalhesEvento from "./Pages/Agenda/DetalhesEvento";
-import IAMusical from "./Pages/IAMusical/IAMusical";
+import { lazy, Suspense } from "react";
 import AppNavigation from "./components/AppNavigation";
 import "./styles/page-theme.css";
 import {
@@ -18,6 +6,21 @@ import {
   usuarioEhAdmin,
   usuarioEstaAutenticado,
 } from "./auth";
+
+const Reunioes = lazy(() => import("./Pages/Reunioes/Reunioes"));
+const Dashboard = lazy(() => import("./Pages/dashboard/dashboard"));
+const Cadastro = lazy(() => import("./Pages/Login/Cadastro"));
+const Login = lazy(() => import("./Pages/Login/login"));
+const Louvores = lazy(() => import("./Pages/Louvores/Louvores"));
+const FormLouvor = lazy(() => import("./Pages/Louvores/FormLouvor"));
+const DetalhesLouvor = lazy(() => import("./Pages/Louvores/DetalhesLouvor"));
+const Agenda = lazy(() => import("./Pages/Agenda/Agenda"));
+const MontarEscala = lazy(() => import("./Pages/Agenda/montarescala"));
+const MinhaAgenda = lazy(() => import("./Pages/Agenda/MinhaAgenda"));
+const Notificacoes = lazy(() => import("./Pages/Notificacoes/Notificacoes"));
+const Equipe = lazy(() => import("./Pages/Equipe/Equipe"));
+const DetalhesEvento = lazy(() => import("./Pages/Agenda/DetalhesEvento"));
+const IAMusical = lazy(() => import("./Pages/IAMusical/IAMusical"));
 
 function ProtectedRoutes({ caminho, usuario, idLouvor }) {
   if (caminho === "/detalhes-louvor") {
@@ -49,6 +52,10 @@ function ProtectedRoutes({ caminho, usuario, idLouvor }) {
     return <IAMusical />;
   }
 
+  if (caminho === "/reunioes" || caminho.startsWith("/reunioes/")) {
+    return <Reunioes />;
+  }
+
   if (caminho === "/equipe") {
     return <Equipe />;
   }
@@ -71,11 +78,6 @@ function ProtectedRoutes({ caminho, usuario, idLouvor }) {
   }
 
   if (caminho === "/editar-louvor") {
-    if (!usuarioEhAdmin(usuario)) {
-      window.location.replace("/louvores");
-      return null;
-    }
-
     if (!idLouvor) {
       window.location.replace("/louvores");
       return null;
@@ -104,22 +106,32 @@ function App() {
       return null;
     }
 
-    return <Login />;
+    return (
+      <Suspense fallback={<main className="app-loading" role="status">Carregando página...</main>}>
+        <Login />
+      </Suspense>
+    );
   }
 
   if (caminho === "/cadastro") {
-    return <Cadastro />;
+    return (
+      <Suspense fallback={<main className="app-loading" role="status">Carregando página...</main>}>
+        <Cadastro />
+      </Suspense>
+    );
   }
 
   return (
     <div className="app-layout">
       <AppNavigation />
       <div className="app-layout-content">
-        <ProtectedRoutes
-          caminho={caminho}
-          usuario={usuario}
-          idLouvor={idLouvor}
-        />
+        <Suspense fallback={<main className="app-loading" role="status">Carregando página...</main>}>
+          <ProtectedRoutes
+            caminho={caminho}
+            usuario={usuario}
+            idLouvor={idLouvor}
+          />
+        </Suspense>
       </div>
     </div>
   );

@@ -71,7 +71,7 @@
 
 .louvores-filtros {
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(160px, 1fr)) auto;
   align-items: end;
   gap: 14px;
   margin-bottom: 22px;
@@ -191,6 +191,12 @@
   gap: 8px;
   margin-top: auto;
   padding-top: 12px;
+}
+
+.louvor-owner {
+  align-self: center;
+  color: #aab6cf;
+  font-size: 0.8rem;
 }
 
 .louvor-actions button,
