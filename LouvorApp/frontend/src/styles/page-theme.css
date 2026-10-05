@@ -80,6 +80,26 @@
   overflow-wrap: anywhere;
 }
 
+.agenda-card ul.agenda-linked-meetings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agenda-linked-meetings a {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: var(--app-accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .agenda-header-actions button,
 .agenda-form button,
 .agenda-actions button,

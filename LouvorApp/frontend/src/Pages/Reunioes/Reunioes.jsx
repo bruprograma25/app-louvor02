@@ -10,11 +10,17 @@ import "./Reunioes.css";
 
 const CODIGO_SALA_VALIDO = /^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$/;
 
+function reuniaoIdDaUrl() {
+  const match = window.location.pathname.match(
+    /^\/reunioes\/evento\/([1-9]\d*)\/?$/
+  );
+  return match ? Number(match[1]) : null;
+}
+
 function salaDaUrl() {
+  if (reuniaoIdDaUrl()) return "";
   const prefixo = "/reunioes/";
-  if (!window.location.pathname.startsWith(prefixo)) {
-    return "";
-  }
+  if (!window.location.pathname.startsWith(prefixo)) return "";
 
   try {
     return decodeURIComponent(
@@ -78,9 +84,12 @@ function Reunioes() {
   }, []);
 
   useEffect(() => {
-    const sala = salaDaUrl();
-    if (sala) {
-      void entrarNaSala(sala);
+    const reuniaoId = reuniaoIdDaUrl();
+    if (reuniaoId) {
+      void entrarNaReuniaoAgendada(reuniaoId);
+    } else {
+      const sala = salaDaUrl();
+      if (sala) void entrarNaSala(sala);
     }
   }, []);
 
@@ -96,7 +105,6 @@ function Reunioes() {
     setDesconectada(false);
     setConectando(true);
     setConexao(null);
-
     try {
       const resposta = await api.post("/api/reunioes/token", {
         room_name: nome,
@@ -110,6 +118,40 @@ function Reunioes() {
       setErro(
         error.response?.data?.erro ||
         "Não foi possível entrar na sala. Verifique sua conexão e tente novamente."
+      );
+    } finally {
+      setConectando(false);
+    }
+  }
+
+  async function entrarNaReuniaoAgendada(id) {
+    setErro("");
+    setDesconectada(false);
+    setConectando(true);
+    setConexao(null);
+    try {
+      const reuniaoResposta = await api.get(`/api/reunioes/${id}`);
+      const reuniao = reuniaoResposta.data;
+      if (reuniao.status !== "ativa") {
+        setErro(
+          reuniao.status === "encerrada"
+            ? "Esta reunião foi encerrada pelo administrador."
+            : "A reunião está agendada. Volte quando o administrador iniciá-la."
+        );
+        return;
+      }
+      const tokenResposta = await api.post("/api/reunioes/token", {
+        meeting_id: id,
+      });
+      setCodigo(reuniao.titulo);
+      setConexao({
+        token: tokenResposta.data.token,
+        serverUrl: tokenResposta.data.server_url,
+      });
+    } catch (error) {
+      setErro(
+        error.response?.data?.erro ||
+        "Não foi possível acessar a reunião. Verifique se você está autorizado."
       );
     } finally {
       setConectando(false);

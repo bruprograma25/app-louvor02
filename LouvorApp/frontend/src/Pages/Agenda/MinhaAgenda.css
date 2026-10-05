@@ -118,6 +118,42 @@
   border-top: 1px solid #e2e8f0;
 }
 
+.minha-agenda-reunioes {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+}
+
+.minha-agenda-reunioes h4 {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.minha-agenda-reunioes > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--app-muted);
+}
+
+.minha-agenda-reunioes a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--app-accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .minha-agenda-louvores h4 {
   margin: 0 0 8px;
   text-transform: uppercase;

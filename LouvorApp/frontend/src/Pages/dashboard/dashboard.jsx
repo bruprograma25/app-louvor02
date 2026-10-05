@@ -22,13 +22,17 @@ function Dashboard() {
       setCarregando(true);
       setErro("");
       const respostas = await Promise.all([
-        api.get("/api/louvores"),
-        api.get("/api/eventos"),
+        api.get("/api/louvores?limit=1&offset=0"),
+        api.get("/api/eventos?limit=1&offset=0"),
         ...(ehAdmin ? [api.get("/api/agenda/membros")] : []),
       ]);
 
-      setQuantidadeLouvores(respostas[0].data.length);
-      setQuantidadeCultos(respostas[1].data.length);
+      setQuantidadeLouvores(
+        Number(respostas[0].headers["x-total-count"] ?? respostas[0].data.length)
+      );
+      setQuantidadeCultos(
+        Number(respostas[1].headers["x-total-count"] ?? respostas[1].data.length)
+      );
       if (ehAdmin) {
         setQuantidadeMembros(respostas[2].data.length);
       }

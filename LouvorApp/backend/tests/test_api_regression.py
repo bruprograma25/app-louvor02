@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
@@ -24,9 +24,12 @@ from app import (  # noqa: E402
     EscalaMembro,
     Louvor,
     Notificacao,
+    Reuniao,
+    ReuniaoParticipante,
     Usuario,
     app,
     db,
+    limiter,
     _criar_token,
     _configurar_url_banco,
     generate_password_hash,
@@ -47,7 +50,8 @@ class ApiRegressionTests(unittest.TestCase):
             db.engine.dispose()
 
     def setUp(self):
-        app.config.update(TESTING=True)
+        app.config.update(TESTING=True, RATELIMIT_ENABLED=False)
+        limiter.enabled = False
         with app.app_context():
             db.drop_all()
             db.create_all()
@@ -130,6 +134,7 @@ class ApiRegressionTests(unittest.TestCase):
             path = path.replace("<int:usuario_id>", "1")
             path = path.replace("<int:evento_id>", "1")
             path = path.replace("<int:louvor_id>", "1")
+            path = path.replace("<int:reuniao_id>", "1")
             for method in rule.methods - {"OPTIONS", "HEAD"}:
                 with self.subTest(method=method, path=path):
                     resposta = self.client.open(path, method=method)
@@ -204,6 +209,62 @@ class ApiRegressionTests(unittest.TestCase):
             resposta.get_json(),
             {"status": "ok", "database": "conectado"},
         )
+
+    def test_agenda_and_song_pagination_is_opt_in_and_reports_total(self):
+        evento_ids = [self._criar_evento() for _ in range(3)]
+        louvor_ids = [
+            self._cadastrar_louvor(f"Paginação {indice}")
+            for indice in range(3)
+        ]
+
+        agenda_completa = self.client.get(
+            "/api/eventos",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(agenda_completa.status_code, 200)
+        self.assertEqual(len(agenda_completa.get_json()), 3)
+        self.assertNotIn("X-Total-Count", agenda_completa.headers)
+
+        agenda_paginada = self.client.get(
+            "/api/eventos?limit=2&offset=1",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(agenda_paginada.status_code, 200)
+        self.assertEqual(
+            [evento["id"] for evento in agenda_paginada.get_json()],
+            evento_ids[1:],
+        )
+        self.assertEqual(agenda_paginada.headers["X-Total-Count"], "3")
+        self.assertEqual(agenda_paginada.headers["X-Page-Limit"], "2")
+        self.assertEqual(agenda_paginada.headers["X-Page-Offset"], "1")
+        self.assertEqual(agenda_paginada.headers["X-Has-More"], "false")
+        headers_expostos = self.client.get(
+            "/api/eventos?limit=2",
+            headers={
+                **self.admin_headers,
+                "Origin": "http://localhost:5173",
+            },
+        ).headers["Access-Control-Expose-Headers"]
+        self.assertIn("X-Total-Count", headers_expostos)
+        self.assertIn("X-Has-More", headers_expostos)
+
+        louvores_paginados = self.client.get(
+            "/api/louvores?limit=2&offset=1",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(louvores_paginados.status_code, 200)
+        self.assertEqual(
+            [louvor["id"] for louvor in louvores_paginados.get_json()],
+            list(reversed(louvor_ids))[1:],
+        )
+        self.assertEqual(louvores_paginados.headers["X-Total-Count"], "3")
+        self.assertEqual(louvores_paginados.headers["X-Has-More"], "false")
+
+        invalid_page = self.client.get(
+            "/api/eventos?limit=101",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(invalid_page.status_code, 400)
 
     def test_musical_assistant_answers_locally_without_provider_configuration(self):
         with patch.dict(os.environ, {"AI_API_KEY": ""}):
@@ -477,6 +538,219 @@ class ApiRegressionTests(unittest.TestCase):
                 json={"room_name": "secure-room"},
             )
         self.assertEqual(response.status_code, 503)
+
+    def _dados_reuniao(self, **alteracoes):
+        inicio = datetime.now(timezone.utc) + timedelta(hours=2)
+        termino = inicio + timedelta(hours=1)
+        dados = {
+            "titulo": "Ensaio online",
+            "descricao": "Passagem de repertório",
+            "inicio_em": inicio.isoformat(),
+            "termino_em": termino.isoformat(),
+            "participantes_ids": [],
+            "permite_compartilhar_tela": False,
+        }
+        dados.update(alteracoes)
+        return dados
+
+    def test_meeting_schedule_is_admin_managed_and_only_visible_to_authorized(self):
+        membro_id = self._cadastrar_membro("Escalado", "escalado@example.invalid")
+        outro_id = self._cadastrar_membro("Visitante", "visitante@example.invalid")
+        membro_headers = self._login(
+            "escalado@example.invalid",
+            "member-password-123",
+        )
+        visitante_headers = self._login(
+            "visitante@example.invalid",
+            "member-password-123",
+        )
+        evento_id = self._criar_evento([
+            {"usuario_id": membro_id, "funcao": "vocal"},
+        ])
+        resposta = self.client.post(
+            f"/api/eventos/{evento_id}/reunioes",
+            headers=self.admin_headers,
+            json=self._dados_reuniao(participantes_ids=[outro_id]),
+        )
+        self.assertEqual(resposta.status_code, 201, resposta.get_json())
+        reuniao = resposta.get_json()["reuniao"]
+        reuniao_id = reuniao["id"]
+        self.assertEqual(reuniao["status"], "agendada")
+        self.assertEqual(
+            {item["id"] for item in reuniao["participantes"]},
+            {outro_id},
+        )
+
+        before_publish = self.client.get(
+            f"/api/reunioes/{reuniao_id}",
+            headers=membro_headers,
+        )
+        self.assertEqual(before_publish.status_code, 403)
+        self.assertEqual(
+            self.client.get(
+                f"/api/reunioes/{reuniao_id}",
+                headers=visitante_headers,
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.post(
+                f"/api/eventos/{evento_id}/reunioes",
+                headers=membro_headers,
+                json=self._dados_reuniao(),
+            ).status_code,
+            403,
+        )
+
+        self.assertEqual(
+            self.client.post(
+                f"/api/eventos/{evento_id}/publicar",
+                headers=self.admin_headers,
+            ).status_code,
+            200,
+        )
+        event_for_member = self.client.get(
+            f"/api/eventos/{evento_id}",
+            headers=membro_headers,
+        )
+        self.assertEqual(event_for_member.status_code, 200)
+        meeting_link = event_for_member.get_json()["reunioes"][0]["url"]
+        self.assertEqual(meeting_link, f"/reunioes/evento/{reuniao_id}")
+        event_for_visitor = self.client.get(
+            f"/api/eventos/{evento_id}",
+            headers=visitante_headers,
+        )
+        visitor_meetings = event_for_visitor.get_json()["reunioes"]
+        self.assertEqual(len(visitor_meetings), 1)
+        self.assertEqual(
+            visitor_meetings[0]["url"],
+            f"/reunioes/evento/{reuniao_id}",
+        )
+
+        with app.app_context():
+            meeting_record = db.session.get(Reuniao, reuniao_id)
+            self.assertTrue(meeting_record.pode_acessar(
+                db.session.get(Usuario, membro_id)
+            ))
+            self.assertTrue(meeting_record.pode_acessar(
+                db.session.get(Usuario, outro_id)
+            ))
+            self.assertFalse(meeting_record.pode_acessar(
+                db.session.get(Usuario, self._criar_outro_usuario())
+            ))
+
+    def _criar_outro_usuario(self):
+        usuario = Usuario(
+            nome="Sem",
+            sobrenome="Acesso",
+            email="sem-acesso@example.invalid",
+            senha=generate_password_hash("member-password-123"),
+            tipo_usuario="membro",
+        )
+        db.session.add(usuario)
+        db.session.commit()
+        return usuario.id
+
+    def test_linked_meeting_livekit_token_is_scoped_and_status_gated(self):
+        membro_id = self._cadastrar_membro("Integrante", "integrante@example.invalid")
+        membro_headers = self._login(
+            "integrante@example.invalid",
+            "member-password-123",
+        )
+        evento_id = self._criar_evento([
+            {"usuario_id": membro_id, "funcao": "teclado"},
+        ])
+        create = self.client.post(
+            f"/api/eventos/{evento_id}/reunioes",
+            headers=self.admin_headers,
+            json=self._dados_reuniao(),
+        )
+        self.assertEqual(create.status_code, 201, create.get_json())
+        reuniao_id = create.get_json()["reuniao"]["id"]
+        self.client.post(
+            f"/api/eventos/{evento_id}/publicar",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(
+            self.client.post(
+                f"/api/reunioes/{reuniao_id}/status",
+                headers=self.admin_headers,
+                json={"status": "ativa"},
+            ).status_code,
+            200,
+        )
+
+        secret = "scheduled-meeting-signing-secret-for-tests"
+        with patch.dict(os.environ, {
+            "LIVEKIT_URL": "wss://example.livekit.cloud",
+            "LIVEKIT_API_KEY": "test-api-key",
+            "LIVEKIT_API_SECRET": secret,
+        }):
+            token_response = self.client.post(
+                "/api/reunioes/token",
+                headers=membro_headers,
+                json={"meeting_id": reuniao_id},
+            )
+            closed = self.client.post(
+                f"/api/reunioes/{reuniao_id}/status",
+                headers=self.admin_headers,
+                json={"status": "encerrada"},
+            )
+            blocked_token = self.client.post(
+                "/api/reunioes/token",
+                headers=membro_headers,
+                json={"meeting_id": reuniao_id},
+            )
+
+        self.assertEqual(token_response.status_code, 200, token_response.get_json())
+        claims = jwt.decode(
+            token_response.get_json()["token"],
+            secret,
+            algorithms=["HS256"],
+            options={"verify_exp": False},
+        )
+        self.assertEqual(claims["video"]["room"], create.get_json()["reuniao"]["codigo"])
+        self.assertEqual(
+            claims["video"]["canPublishSources"],
+            ["camera", "microphone"],
+        )
+        self.assertEqual(closed.status_code, 200)
+        self.assertEqual(blocked_token.status_code, 409)
+
+    def test_meeting_rejects_invalid_times_and_cannot_be_reactivated(self):
+        evento_id = self._criar_evento()
+        invalid = self._dados_reuniao(
+            inicio_em="2026-10-06T10:00:00",
+        )
+        response = self.client.post(
+            f"/api/eventos/{evento_id}/reunioes",
+            headers=self.admin_headers,
+            json=invalid,
+        )
+        self.assertEqual(response.status_code, 400)
+
+        create = self.client.post(
+            f"/api/eventos/{evento_id}/reunioes",
+            headers=self.admin_headers,
+            json=self._dados_reuniao(),
+        )
+        meeting_id = create.get_json()["reuniao"]["id"]
+        self.assertEqual(
+            self.client.post(
+                f"/api/reunioes/{meeting_id}/status",
+                headers=self.admin_headers,
+                json={"status": "encerrada"},
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.post(
+                f"/api/reunioes/{meeting_id}/status",
+                headers=self.admin_headers,
+                json={"status": "ativa"},
+            ).status_code,
+            409,
+        )
 
     def test_song_specific_answers_use_database_facts_without_guessing(self):
         song_id = self._cadastrar_louvor("Canção para Ministrar")

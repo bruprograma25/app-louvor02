@@ -49,6 +49,10 @@ function FormEvento({
   evento,
   membros,
   louvores,
+  totalLouvores,
+  offsetLouvores,
+  carregandoMaisLouvores,
+  onLoadMoreLouvores,
   onSaved,
   onCancel,
 }) {
@@ -239,6 +243,18 @@ function FormEvento({
               </label>
             ))}
           </div>
+        )}
+        {offsetLouvores < totalLouvores && (
+          <button
+            type="button"
+            className="agenda-secondary"
+            onClick={onLoadMoreLouvores}
+            disabled={carregandoMaisLouvores}
+          >
+            {carregandoMaisLouvores
+              ? "Carregando..."
+              : `Carregar mais louvores (${louvores.length} de ${totalLouvores})`}
+          </button>
         )}
       </fieldset>
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
 import { getUsuarioLogado, usuarioEhAdmin } from "../../auth";
 import "./DetalhesEvento.css";
+import GerenciarReunioes from "./GerenciarReunioes";
 
 const STATUS_ESCALA = {
   pendente: "Aguardando resposta",
@@ -100,6 +101,11 @@ function DetalhesEvento() {
 
       {!carregando && evento && (
         <>
+          <GerenciarReunioes
+            evento={evento}
+            ehAdmin={ehAdmin}
+            onAtualizado={carregarEvento}
+          />
           <section className="detalhes-evento-panel">
             <div className="detalhes-evento-title">
               <div>

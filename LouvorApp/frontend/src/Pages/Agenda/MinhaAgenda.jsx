@@ -56,26 +56,16 @@ function MinhaAgenda() {
       setCarregando(true);
       setErro("");
 
-      const [respostaEscalas, respostaEventos] = await Promise.all([
-        api.get(`/api/membros/${usuario.id}/escalas`),
-        api.get("/api/eventos"),
-      ]);
-
-      const eventos = new Map(
-        respostaEventos.data.map((evento) => [String(evento.id), evento])
+      const respostaEscalas = await api.get(
+        `/api/membros/${usuario.id}/escalas`
       );
       const escalasRecebidas = respostaEscalas.data;
-      const respostasOpcoes = await Promise.all(
-        escalasRecebidas.map((item) =>
-          api.get(`/api/eventos/${item.evento.id}/troca-opcoes`)
-        )
-      );
 
       setEscalas(
         escalasRecebidas
           .map((item) => ({
             ...item,
-            eventoCompleto: eventos.get(String(item.evento.id)),
+            eventoCompleto: item.evento,
           }))
           .sort((primeiro, segundo) => {
             const dataPrimeiro = `${primeiro.evento.data} ${primeiro.evento.hora || ""}`;
@@ -85,9 +75,9 @@ function MinhaAgenda() {
       );
       setOpcoesTroca(
         Object.fromEntries(
-          escalasRecebidas.map((item, index) => [
+          escalasRecebidas.map((item) => [
             item.escala.id,
-            respostasOpcoes[index].data,
+            item.opcoes_troca || [],
           ])
         )
       );
@@ -223,6 +213,7 @@ function MinhaAgenda() {
             {escalas.map((item) => {
               const evento = item.eventoCompleto;
               const louvores = evento?.louvores || [];
+              const reunioes = evento?.reunioes || [];
 
               return (
                 <article className="minha-agenda-card" key={item.escala.id}>
@@ -321,6 +312,27 @@ function MinhaAgenda() {
                   )}
 
                   {evento?.descricao && <p>{evento.descricao}</p>}
+
+                  {reunioes.length > 0 && (
+                    <div className="minha-agenda-reunioes">
+                      <h4>Reunião vinculada</h4>
+                      {reunioes.map((reuniao) => (
+                        <div key={reuniao.id}>
+                          <span>
+                            {reuniao.titulo} ·{" "}
+                            {reuniao.status === "ativa"
+                              ? "Em andamento"
+                              : reuniao.status === "agendada"
+                                ? `Agendada para ${new Date(reuniao.inicio_em).toLocaleString("pt-BR")}`
+                                : "Encerrada"}
+                          </span>
+                          {reuniao.status === "ativa" && (
+                            <a href={reuniao.url}>Acessar reunião</a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="minha-agenda-louvores">
                     <h4>Louvores relacionados</h4>

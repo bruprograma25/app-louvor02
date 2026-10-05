@@ -29,6 +29,8 @@ const FORMULARIO_VAZIO = {
   usuario_id: "",
   funcao: "",
 };
+const PAGINA_EVENTOS = 100;
+const PAGINA_LOUVORES = 100;
 
 function formatarData(data) {
   if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
@@ -72,6 +74,12 @@ function MontarEscala() {
   const [editandoLouvorId, setEditandoLouvorId] = useState(null);
   const [ordemLouvor, setOrdemLouvor] = useState("");
   const [salvandoLouvor, setSalvandoLouvor] = useState(false);
+  const [totalEventos, setTotalEventos] = useState(0);
+  const [offsetEventos, setOffsetEventos] = useState(0);
+  const [carregandoMaisEventos, setCarregandoMaisEventos] = useState(false);
+  const [totalLouvores, setTotalLouvores] = useState(0);
+  const [offsetLouvores, setOffsetLouvores] = useState(0);
+  const [carregandoMaisLouvores, setCarregandoMaisLouvores] = useState(false);
 
   const eventoSelecionado = useMemo(
     () => eventos.find((evento) => String(evento.id) === String(eventoId)),
@@ -132,15 +140,32 @@ function MontarEscala() {
       setCarregando(true);
       setErro("");
       const [respostaEventos, respostaMembros, respostaLouvores] = await Promise.all([
-        api.get("/api/eventos"),
+        api.get(`/api/eventos?limit=${PAGINA_EVENTOS}&offset=0`),
         api.get("/api/agenda/membros"),
-        api.get("/api/louvores"),
+        api.get(`/api/louvores?limit=${PAGINA_LOUVORES}&offset=0`),
       ]);
 
-      const eventosRecebidos = respostaEventos.data;
+      let eventosRecebidos = respostaEventos.data;
+      if (
+        eventoInicial &&
+        !eventosRecebidos.some(
+          (evento) => String(evento.id) === String(eventoInicial)
+        )
+      ) {
+        const detalhe = await api.get(`/api/eventos/${eventoInicial}`);
+        eventosRecebidos = [detalhe.data, ...eventosRecebidos];
+      }
       setEventos(eventosRecebidos);
       setMembros(respostaMembros.data);
       setLouvores(respostaLouvores.data);
+      setTotalEventos(
+        Number(respostaEventos.headers["x-total-count"] ?? respostaEventos.data.length)
+      );
+      setOffsetEventos(respostaEventos.data.length);
+      setTotalLouvores(
+        Number(respostaLouvores.headers["x-total-count"] ?? respostaLouvores.data.length)
+      );
+      setOffsetLouvores(respostaLouvores.data.length);
 
       if (eventosRecebidos.length > 0) {
         setEventoId((valorAtual) => {
@@ -160,7 +185,63 @@ function MontarEscala() {
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [eventoInicial]);
+
+  async function carregarMaisEventos() {
+    if (carregandoMaisEventos || offsetEventos >= totalEventos) return;
+    try {
+      setCarregandoMaisEventos(true);
+      const resposta = await api.get(
+        `/api/eventos?limit=${PAGINA_EVENTOS}&offset=${offsetEventos}`
+      );
+      setEventos((anteriores) => {
+        const idsAtuais = new Set(anteriores.map((evento) => evento.id));
+        return [
+          ...anteriores,
+          ...resposta.data.filter((evento) => !idsAtuais.has(evento.id)),
+        ];
+      });
+      setOffsetEventos((offset) => offset + resposta.data.length);
+      setTotalEventos(
+        Number(resposta.headers["x-total-count"] ?? totalEventos)
+      );
+    } catch (error) {
+      setErro(
+        error.response?.data?.erro ||
+        "Não foi possível carregar mais eventos."
+      );
+    } finally {
+      setCarregandoMaisEventos(false);
+    }
+  }
+
+  async function carregarMaisLouvores() {
+    if (carregandoMaisLouvores || offsetLouvores >= totalLouvores) return;
+    try {
+      setCarregandoMaisLouvores(true);
+      const resposta = await api.get(
+        `/api/louvores?limit=${PAGINA_LOUVORES}&offset=${offsetLouvores}`
+      );
+      setLouvores((anteriores) => {
+        const idsAtuais = new Set(anteriores.map((louvor) => louvor.id));
+        return [
+          ...anteriores,
+          ...resposta.data.filter((louvor) => !idsAtuais.has(louvor.id)),
+        ];
+      });
+      setOffsetLouvores((offset) => offset + resposta.data.length);
+      setTotalLouvores(
+        Number(resposta.headers["x-total-count"] ?? totalLouvores)
+      );
+    } catch (error) {
+      setErro(
+        error.response?.data?.erro ||
+        "Não foi possível carregar mais louvores."
+      );
+    } finally {
+      setCarregandoMaisLouvores(false);
+    }
+  }
 
   useEffect(() => {
     if (ehAdmin) {
@@ -430,6 +511,15 @@ function MontarEscala() {
                 </option>
               ))}
             </select>
+            {offsetEventos < totalEventos && (
+              <button
+                type="button"
+                onClick={carregarMaisEventos}
+                disabled={carregandoMaisEventos}
+              >
+                {carregandoMaisEventos ? "Carregando..." : "Carregar mais eventos"}
+              </button>
+            )}
 
             {eventoSelecionado && (
               <div className="montar-escala-evento-resumo">
@@ -542,6 +632,17 @@ function MontarEscala() {
                       </option>
                     ))}
                 </select>
+                {offsetLouvores < totalLouvores && (
+                  <button
+                    type="button"
+                    onClick={carregarMaisLouvores}
+                    disabled={carregandoMaisLouvores}
+                  >
+                    {carregandoMaisLouvores
+                      ? "Carregando..."
+                      : "Carregar mais louvores"}
+                  </button>
+                )}
                 <button
                   className="montar-escala-primary"
                   type="button"

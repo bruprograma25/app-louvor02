@@ -10,6 +10,8 @@ const STATUS_ESCALA = {
   recusado: "recusou",
   troca_solicitada: "solicitou troca",
 };
+const EVENTOS_POR_PAGINA = 50;
+const LOUVORES_POR_PAGINA = 100;
 
 function Agenda() {
   const usuario = getUsuarioLogado();
@@ -21,11 +23,27 @@ function Agenda() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [eventoEmEdicao, setEventoEmEdicao] = useState(null);
+  const [eventoSelecionado, setEventoSelecionado] = useState(null);
+  const [totalEventos, setTotalEventos] = useState(0);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+  const [totalLouvores, setTotalLouvores] = useState(0);
+  const [offsetLouvores, setOffsetLouvores] = useState(0);
+  const [carregandoMaisLouvores, setCarregandoMaisLouvores] = useState(false);
   const parametros = new URLSearchParams(window.location.search);
   const eventoQuery = parametros.get("editar");
   const [mostrarFormulario, setMostrarFormulario] = useState(
     () => ehAdmin && parametros.get("novo") === "1"
   );
+
+  function incluirLouvoresDoEvento(evento) {
+    setLouvores((atuais) => {
+      const idsAtuais = new Set(atuais.map((louvor) => louvor.id));
+      return [
+        ...atuais,
+        ...(evento?.louvores || []).filter((louvor) => !idsAtuais.has(louvor.id)),
+      ];
+    });
+  }
 
   function formatarData(data) {
     if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
@@ -39,12 +57,25 @@ function Agenda() {
     try {
       setCarregando(true);
       setErro("");
-      const agenda = await api.get("/api/eventos");
+      const agenda = await api.get(
+        `/api/eventos?limit=${EVENTOS_POR_PAGINA}&offset=0`
+      );
       setCultos(agenda.data);
+      setTotalEventos(
+        Number(agenda.headers["x-total-count"] ?? agenda.data.length)
+      );
+      let louvoresDoEventoSelecionado = null;
       if (ehAdmin && eventoQuery) {
         const eventoId = Number(eventoQuery);
-        if (agenda.data.some((culto) => culto.id === eventoId)) {
+        let evento = agenda.data.find((culto) => culto.id === eventoId);
+        if (!evento) {
+          const detalhe = await api.get(`/api/eventos/${eventoId}`);
+          evento = detalhe.data;
+        }
+        if (evento) {
+          louvoresDoEventoSelecionado = evento;
           setEventoEmEdicao(eventoId);
+          setEventoSelecionado(evento);
           setMostrarFormulario(true);
         }
       }
@@ -52,10 +83,15 @@ function Agenda() {
       if (ehAdmin) {
         const [respostaMembros, respostaLouvores] = await Promise.all([
           api.get("/api/agenda/membros"),
-          api.get("/api/louvores"),
+          api.get(`/api/louvores?limit=${LOUVORES_POR_PAGINA}&offset=0`),
         ]);
         setMembros(respostaMembros.data);
         setLouvores(respostaLouvores.data);
+        setTotalLouvores(
+          Number(respostaLouvores.headers["x-total-count"] ?? respostaLouvores.data.length)
+        );
+        setOffsetLouvores(respostaLouvores.data.length);
+        incluirLouvoresDoEvento(louvoresDoEventoSelecionado);
       }
     } catch (error) {
       setErro(
@@ -73,6 +109,7 @@ function Agenda() {
 
   function limparFormulario() {
     setEventoEmEdicao(null);
+    setEventoSelecionado(null);
     setMostrarFormulario(false);
   }
 
@@ -85,7 +122,9 @@ function Agenda() {
   function editarEvento(evento) {
     setMensagem("");
     setErro("");
+    incluirLouvoresDoEvento(evento);
     setEventoEmEdicao(evento.id);
+    setEventoSelecionado(evento);
     setMostrarFormulario(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -138,6 +177,55 @@ function Agenda() {
         error.response?.data?.erro ||
         "Não foi possível confirmar a escala."
       );
+    }
+  }
+
+  async function carregarMaisEventos() {
+    if (carregandoMais || cultos.length >= totalEventos) return;
+    try {
+      setCarregandoMais(true);
+      const resposta = await api.get(
+        `/api/eventos?limit=${EVENTOS_POR_PAGINA}&offset=${cultos.length}`
+      );
+      setCultos((anteriores) => [...anteriores, ...resposta.data]);
+      setTotalEventos(
+        Number(resposta.headers["x-total-count"] ?? totalEventos)
+      );
+    } catch (error) {
+      setErro(
+        error.response?.data?.erro ||
+        "Não foi possível carregar os próximos eventos."
+      );
+    } finally {
+      setCarregandoMais(false);
+    }
+  }
+
+  async function carregarMaisLouvores() {
+    if (carregandoMaisLouvores || offsetLouvores >= totalLouvores) return;
+    try {
+      setCarregandoMaisLouvores(true);
+      const resposta = await api.get(
+        `/api/louvores?limit=${LOUVORES_POR_PAGINA}&offset=${offsetLouvores}`
+      );
+      setLouvores((atuais) => {
+        const idsAtuais = new Set(atuais.map((louvor) => louvor.id));
+        return [
+          ...atuais,
+          ...resposta.data.filter((louvor) => !idsAtuais.has(louvor.id)),
+        ];
+      });
+      setOffsetLouvores((offset) => offset + resposta.data.length);
+      setTotalLouvores(
+        Number(resposta.headers["x-total-count"] ?? totalLouvores)
+      );
+    } catch (error) {
+      setErro(
+        error.response?.data?.erro ||
+        "Não foi possível carregar mais louvores."
+      );
+    } finally {
+      setCarregandoMaisLouvores(false);
     }
   }
 
@@ -197,9 +285,16 @@ function Agenda() {
 
       {ehAdmin && mostrarFormulario && (
         <FormEvento
-          evento={cultos.find((culto) => culto.id === eventoEmEdicao)}
+          evento={
+            eventoSelecionado ||
+            cultos.find((culto) => culto.id === eventoEmEdicao)
+          }
           membros={membros}
           louvores={louvores}
+          totalLouvores={totalLouvores}
+          offsetLouvores={offsetLouvores}
+          carregandoMaisLouvores={carregandoMaisLouvores}
+          onLoadMoreLouvores={carregarMaisLouvores}
           onSaved={eventoSalvo}
           onCancel={limparFormulario}
         />
@@ -259,6 +354,24 @@ function Agenda() {
                 </li>
               ))}
             </ul>
+            {culto.reunioes?.length > 0 && (
+              <>
+                <h4>Reuniões vinculadas</h4>
+                <ul className="agenda-linked-meetings">
+                  {culto.reunioes.map((reuniao) => (
+                    <li key={reuniao.id}>
+                      <span>{reuniao.titulo} · {reuniao.status}</span>
+                      {reuniao.status === "ativa" && (
+                        <a href={reuniao.url}>Entrar</a>
+                      )}
+                      {reuniao.status === "agendada" && (
+                        <span>Agendada para {new Date(reuniao.inicio_em).toLocaleString("pt-BR")}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <h4>Louvores</h4>
             <ul>
               {culto.louvores.map((louvor) => (
@@ -313,6 +426,18 @@ function Agenda() {
             )}
           </article>
         ))}
+        {!carregando && cultos.length < totalEventos && (
+          <button
+            className="agenda-load-more"
+            type="button"
+            onClick={carregarMaisEventos}
+            disabled={carregandoMais}
+          >
+            {carregandoMais
+              ? "Carregando..."
+              : `Carregar mais (${cultos.length} de ${totalEventos})`}
+          </button>
+        )}
       </section>
     </main>
   );

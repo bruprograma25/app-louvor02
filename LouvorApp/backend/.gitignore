@@ -5,3 +5,4 @@ __pycache__/
 instance/
 *.bak
 *.backup
+loadtests/reports/

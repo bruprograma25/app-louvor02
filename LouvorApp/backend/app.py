@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import secrets
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -14,16 +15,21 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_migrate import Migrate
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from redis import Redis
 
 from werkzeug.security import (
     generate_password_hash,
     check_password_hash
 )
 
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import aliased, selectinload
 
 from models import (
     db,
@@ -33,6 +39,8 @@ from models import (
     EscalaMembro,
     Notificacao,
     CultoLouvor,
+    Reuniao,
+    ReuniaoParticipante,
 )
 
 
@@ -74,6 +82,33 @@ def _campo_texto_valido(dados, campo, limite):
     return valor is None or (
         isinstance(valor, str) and len(valor.strip()) <= limite
     )
+
+
+def _paginacao_solicitada():
+    if "limit" not in request.args and "offset" not in request.args:
+        return None, None
+    try:
+        limite = int(request.args.get("limit", "50"))
+        deslocamento = int(request.args.get("offset", "0"))
+    except ValueError:
+        return None, "Use números inteiros para limit e offset."
+    if not 1 <= limite <= 100 or not 0 <= deslocamento <= 1_000_000:
+        return None, "A página deve usar limit de 1 a 100 e offset de 0 a 1.000.000."
+    return {"limit": limite, "offset": deslocamento}, None
+
+
+def _resposta_paginada(dados, total, paginacao):
+    resposta = jsonify(dados)
+    if paginacao is not None:
+        limite = paginacao["limit"]
+        deslocamento = paginacao["offset"]
+        resposta.headers["X-Total-Count"] = str(total)
+        resposta.headers["X-Page-Limit"] = str(limite)
+        resposta.headers["X-Page-Offset"] = str(deslocamento)
+        resposta.headers["X-Has-More"] = str(
+            deslocamento + len(dados) < total
+        ).lower()
+    return resposta, 200
 
 
 def _validar_dados_louvor(dados):
@@ -697,6 +732,7 @@ def _gerar_resposta_ia_musical(mensagens, louvores, analise_vocal=None):
 app = Flask(__name__)
 
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
+app.config["RATELIMIT_ENABLED"] = True
 
 
 @app.errorhandler(HTTPException)
@@ -803,7 +839,16 @@ if os.getenv("APP_ENV", "").lower() == "production":
         raise RuntimeError(
             "Configure somente origens HTTPS válidas, sem caminhos, em CORS_ORIGINS."
         )
-CORS(app, resources={r"/api/*": {"origins": origens_cors}})
+CORS(
+    app,
+    resources={r"/api/*": {"origins": origens_cors}},
+    expose_headers=[
+        "X-Total-Count",
+        "X-Page-Limit",
+        "X-Page-Offset",
+        "X-Has-More",
+    ],
+)
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "").strip()
 if len(JWT_SECRET_KEY.encode("utf-8")) < 32:
@@ -891,6 +936,74 @@ def proteger_api_por_padrao():
 
     request.usuario_logado = usuario
     return validar_corpo_json()
+
+
+def _rate_limit_identity():
+    usuario = getattr(request, "usuario_logado", None)
+    if usuario:
+        return f"usuario:{usuario.id}"
+    return f"ip:{get_remote_address()}"
+
+
+def _rate_limit_login_identity():
+    dados = request.get_json(silent=True) or {}
+    email = _texto(dados, "email").lower()[:120]
+    return f"login:{get_remote_address()}:{email}"
+
+
+RATE_LIMIT_STORAGE_URI = os.getenv(
+    "RATELIMIT_STORAGE_URI",
+    "memory://",
+).strip()
+if (
+    os.getenv("APP_ENV", "").lower() == "production"
+    and not RATE_LIMIT_STORAGE_URI.startswith(("redis://", "rediss://"))
+):
+    raise RuntimeError(
+        "Configure RATELIMIT_STORAGE_URI com Redis para limitar requisições "
+        "de forma compartilhada entre processos."
+    )
+
+limiter = Limiter(
+    key_func=_rate_limit_identity,
+    app=app,
+    default_limits=[os.getenv("API_RATE_LIMIT", "600 per minute")],
+    storage_uri=RATE_LIMIT_STORAGE_URI,
+    strategy="moving-window",
+    headers_enabled=True,
+)
+
+rate_limit_redis = (
+    Redis.from_url(
+        RATE_LIMIT_STORAGE_URI,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        health_check_interval=30,
+    )
+    if RATE_LIMIT_STORAGE_URI.startswith(("redis://", "rediss://"))
+    else None
+)
+
+try:
+    PROXY_FIX_HOPS = int(os.getenv("PROXY_FIX_HOPS", "0"))
+except ValueError as erro:
+    raise RuntimeError("PROXY_FIX_HOPS precisa ser um inteiro.") from erro
+if not 0 <= PROXY_FIX_HOPS <= 3:
+    raise RuntimeError("PROXY_FIX_HOPS deve estar entre zero e três.")
+if PROXY_FIX_HOPS:
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=PROXY_FIX_HOPS,
+        x_proto=PROXY_FIX_HOPS,
+        x_host=PROXY_FIX_HOPS,
+    )
+
+
+@app.errorhandler(429)
+def tratar_limite_requisicoes(_erro):
+    return jsonify({
+        "erro": "Limite de requisições atingido. Aguarde e tente novamente.",
+    }), 429
 
 
 def validar_corpo_json():
@@ -999,31 +1112,21 @@ def _validar_membros_escala(dados):
     return validos, None
 
 
-def _culto_dict(culto, usuario_id=None):
-    membros = (
+def _culto_dict(
+    culto,
+    usuario_id=None,
+    reunioes=None,
+    membros_dados=None,
+    louvores_dados=None,
+):
+    if membros_dados is None:
+        membros = (
         db.session.query(EscalaMembro, Usuario)
         .join(Usuario, Usuario.id == EscalaMembro.usuario_id)
         .filter(EscalaMembro.culto_id == culto.id)
         .all()
-    )
-    louvores = (
-        db.session.query(CultoLouvor, Louvor)
-        .join(Louvor, Louvor.id == CultoLouvor.louvor_id)
-        .filter(CultoLouvor.culto_id == culto.id)
-        .order_by(CultoLouvor.ordem.asc())
-        .all()
-    )
-
-    return {
-        "id": culto.id,
-        "titulo": culto.titulo,
-        "data": culto.data,
-        "hora": culto.hora or "",
-        "local": culto.local or "",
-        "descricao": culto.descricao or "",
-        "observacoes": culto.descricao or "",
-        "publicado": bool(culto.publicado),
-        "membros": [
+        )
+        membros_dados = [
             {
                 "id": escala.usuario_id,
                 "nome": f"{usuario.nome} {usuario.sobrenome}".strip(),
@@ -1035,8 +1138,16 @@ def _culto_dict(culto, usuario_id=None):
             }
             for escala, usuario in membros
             if usuario_id is None or escala.usuario_id == usuario_id
-        ],
-        "louvores": [
+        ]
+    if louvores_dados is None:
+        louvores = (
+        db.session.query(CultoLouvor, Louvor)
+        .join(Louvor, Louvor.id == CultoLouvor.louvor_id)
+        .filter(CultoLouvor.culto_id == culto.id)
+        .order_by(CultoLouvor.ordem.asc())
+        .all()
+        )
+        louvores_dados = [
             {
                 "id": louvor.id,
                 "titulo": louvor.titulo,
@@ -1045,8 +1156,101 @@ def _culto_dict(culto, usuario_id=None):
                 "ordem": vinculo.ordem,
             }
             for vinculo, louvor in louvores
-        ],
+        ]
+
+    dados = {
+        "id": culto.id,
+        "titulo": culto.titulo,
+        "data": culto.data,
+        "hora": culto.hora or "",
+        "local": culto.local or "",
+        "descricao": culto.descricao or "",
+        "observacoes": culto.descricao or "",
+        "publicado": bool(culto.publicado),
+        "membros": membros_dados,
+        "louvores": louvores_dados,
     }
+    if reunioes is not None:
+        dados["reunioes"] = reunioes
+    return dados
+
+
+def _cultos_dict(cultos, usuario_id=None, reunioes_por_evento=None):
+    if not cultos:
+        return []
+    evento_ids = [culto.id for culto in cultos]
+    usuario_troca = aliased(Usuario)
+    escalas = db.session.query(
+        EscalaMembro,
+        Usuario,
+        usuario_troca,
+    ).join(
+        Usuario,
+        Usuario.id == EscalaMembro.usuario_id,
+    ).outerjoin(
+        usuario_troca,
+        usuario_troca.id == EscalaMembro.troca_para_usuario_id,
+    ).filter(
+        EscalaMembro.culto_id.in_(evento_ids),
+    ).all()
+    vinculos = db.session.query(
+        CultoLouvor,
+        Louvor,
+    ).join(
+        Louvor,
+        Louvor.id == CultoLouvor.louvor_id,
+    ).filter(
+        CultoLouvor.culto_id.in_(evento_ids),
+    ).order_by(
+        CultoLouvor.culto_id.asc(),
+        CultoLouvor.ordem.asc(),
+    ).all()
+
+    membros_por_evento = {evento_id: [] for evento_id in evento_ids}
+    for escala, membro, destino_troca in escalas:
+        if usuario_id is not None and escala.usuario_id != usuario_id:
+            continue
+        membros_por_evento[escala.culto_id].append({
+            "id": escala.usuario_id,
+            "nome": f"{membro.nome} {membro.sobrenome}".strip(),
+            "email": membro.email,
+            "funcao": escala.funcao,
+            "confirmado": bool(escala.confirmado),
+            "status": _status_escala(escala),
+            "troca_para": (
+                {
+                    "usuario_id": destino_troca.id,
+                    "nome": (
+                        f"{destino_troca.nome} "
+                        f"{destino_troca.sobrenome}"
+                    ).strip(),
+                }
+                if destino_troca
+                else None
+            ),
+        })
+
+    louvores_por_evento = {evento_id: [] for evento_id in evento_ids}
+    for vinculo, louvor in vinculos:
+        louvores_por_evento[vinculo.culto_id].append({
+            "id": louvor.id,
+            "titulo": louvor.titulo,
+            "artista": louvor.artista or "",
+            "tom": louvor.tom or "",
+            "ordem": vinculo.ordem,
+        })
+
+    reunioes_por_evento = reunioes_por_evento or {}
+    return [
+        _culto_dict(
+            culto,
+            usuario_id,
+            reunioes=reunioes_por_evento.get(culto.id, []),
+            membros_dados=membros_por_evento[culto.id],
+            louvores_dados=louvores_por_evento[culto.id],
+        )
+        for culto in cultos
+    ]
 
 
 def _escala_dict(escala):
@@ -1232,6 +1436,8 @@ if DATABASE_BACKEND == "postgresql":
         "pool_size": DATABASE_POOL_SIZE,
         "max_overflow": DATABASE_MAX_OVERFLOW,
         "pool_recycle": DATABASE_POOL_RECYCLE,
+        "pool_timeout": 30,
+        "pool_use_lifo": True,
     })
 
 db.init_app(app)
@@ -1515,6 +1721,19 @@ def health():
         )
         return jsonify({"status": "indisponivel"}), 503
 
+    if rate_limit_redis:
+        try:
+            rate_limit_redis.ping()
+        except Exception as erro:
+            app.logger.error(
+                "Health check do Redis falhou (%s).",
+                type(erro).__name__,
+            )
+            return jsonify({
+                "status": "indisponivel",
+                "rate_limit_storage": "indisponivel",
+            }), 503
+
     return jsonify({"status": "ok", "database": "conectado"}), 200
 
 
@@ -1523,6 +1742,7 @@ def health():
 # =========================================================
 
 @app.route("/api/cadastro", methods=["POST"])
+@limiter.limit("10 per hour", key_func=get_remote_address)
 def cadastrar_usuario():
 
     dados = request.get_json(silent=True)
@@ -1669,6 +1889,8 @@ def cadastrar_usuario():
 # =========================================================
 
 @app.route("/api/login", methods=["POST"])
+@limiter.limit("10 per minute", key_func=_rate_limit_login_identity)
+@limiter.limit("30 per hour", key_func=_rate_limit_login_identity)
 def login():
 
     dados = request.get_json(silent=True)
@@ -1741,11 +1963,21 @@ def login():
 @token_required
 def listar_louvores():
 
+    paginacao, erro_paginacao = _paginacao_solicitada()
+    if erro_paginacao:
+        return jsonify({"erro": erro_paginacao}), 400
+
     if request.usuario_logado.tipo_usuario.lower() == "admin":
-        registros = db.session.query(Louvor, Usuario).outerjoin(
+        consulta = db.session.query(Louvor, Usuario).outerjoin(
             Usuario,
             Usuario.id == Louvor.dono_id,
-        ).order_by(Louvor.id.desc()).all()
+        ).order_by(Louvor.id.desc())
+        total = consulta.order_by(None).count() if paginacao else None
+        if paginacao:
+            consulta = consulta.limit(paginacao["limit"]).offset(
+                paginacao["offset"]
+            )
+        registros = consulta.all()
         louvores = []
         for louvor, dono in registros:
             dados = louvor.to_dict()
@@ -1755,16 +1987,31 @@ def listar_louvores():
                 else "Acervo anterior"
             )
             louvores.append(dados)
+        if paginacao:
+            return _resposta_paginada(louvores, total, paginacao)
         return jsonify(louvores), 200
 
-    louvores = Louvor.query.filter_by(
+    consulta = Louvor.query.filter_by(
         dono_id=request.usuario_logado.id
-    ).order_by(Louvor.id.desc()).all()
+    ).order_by(Louvor.id.desc())
+    total = consulta.order_by(None).count() if paginacao else None
+    if paginacao:
+        consulta = consulta.limit(paginacao["limit"]).offset(
+            paginacao["offset"]
+        )
+    louvores = consulta.all()
+    if paginacao:
+        return _resposta_paginada(
+            [louvor.to_dict() for louvor in louvores],
+            total,
+            paginacao,
+        )
     return jsonify([louvor.to_dict() for louvor in louvores]), 200
 
 
 @app.route("/api/ia-musical/conversar", methods=["POST"])
 @token_required
+@limiter.limit("10 per minute")
 def conversar_com_ia_musical():
     dados = request.get_json(silent=True) or {}
     mensagens = dados.get("mensagens")
@@ -1971,6 +2218,162 @@ def _livekit_configuracao():
     return servidor.rstrip("/"), chave, segredo
 
 
+def _data_hora_reuniao(valor, campo):
+    if not isinstance(valor, str) or not valor.strip():
+        raise ValueError(f"Informe {campo} da reunião.")
+    try:
+        data_hora = datetime.fromisoformat(valor.strip().replace("Z", "+00:00"))
+    except ValueError as erro:
+        raise ValueError(f"Informe {campo} da reunião em formato ISO válido.") from erro
+    if data_hora.tzinfo is None or data_hora.utcoffset() is None:
+        raise ValueError(f"{campo.capitalize()} precisa incluir o fuso horário.")
+    return data_hora.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _validar_agenda_reuniao(dados):
+    titulo = _texto(dados, "titulo")
+    descricao = _texto(dados, "descricao")
+    if not titulo or len(titulo) > 150:
+        return None, "Informe um título de até 150 caracteres."
+    if len(descricao) > 2000:
+        return None, "A descrição da reunião excede 2.000 caracteres."
+
+    try:
+        inicio = _data_hora_reuniao(dados.get("inicio_em"), "o início")
+        termino = _data_hora_reuniao(dados.get("termino_em"), "o término")
+    except ValueError as erro:
+        return None, str(erro)
+    duracao = termino - inicio
+    if duracao.total_seconds() <= 0 or duracao > timedelta(hours=12):
+        return None, "A reunião deve durar entre alguns minutos e 12 horas."
+    if inicio < datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1):
+        return None, "O início da reunião não pode estar mais de uma hora no passado."
+    if inicio > datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=365):
+        return None, "O início da reunião não pode exceder um ano."
+
+    ids = dados.get("participantes_ids", [])
+    if not isinstance(ids, list) or len(ids) > 100:
+        return None, "Selecione no máximo 100 participantes adicionais."
+    try:
+        ids = [int(valor) for valor in ids]
+    except (TypeError, ValueError):
+        return None, "A lista de participantes é inválida."
+    if any(valor < 1 for valor in ids) or len(ids) != len(set(ids)):
+        return None, "A lista de participantes contém valores inválidos ou repetidos."
+
+    return {
+        "titulo": titulo,
+        "descricao": descricao or None,
+        "inicio_em": inicio,
+        "termino_em": termino,
+        "participantes_ids": ids,
+    }, None
+
+
+def _usuarios_participantes(ids):
+    if not ids:
+        return [], None
+    usuarios = Usuario.query.filter(Usuario.id.in_(ids)).all()
+    encontrados = {usuario.id for usuario in usuarios}
+    if encontrados != set(ids):
+        return None, "Um ou mais participantes não foram encontrados."
+    return usuarios, None
+
+
+def _reuniao_json(reuniao, usuario, incluir_participantes=False):
+    inicio = reuniao.inicio_em.replace(tzinfo=timezone.utc).isoformat()
+    termino = reuniao.termino_em.replace(tzinfo=timezone.utc).isoformat()
+    resposta = {
+        "id": reuniao.id,
+        "titulo": reuniao.titulo,
+        "descricao": reuniao.descricao or "",
+        "status": reuniao.status,
+        "inicio_em": inicio,
+        "termino_em": termino,
+        "culto_id": reuniao.culto_id,
+        "codigo": reuniao.codigo,
+        "url": f"/reunioes/evento/{reuniao.id}",
+        "permite_compartilhar_tela": bool(reuniao.permite_compartilhar_tela),
+    }
+    if incluir_participantes:
+        resposta["participantes"] = [
+            {
+                "id": item.usuario_id,
+                "nome": f"{item.usuario.nome} {item.usuario.sobrenome}".strip(),
+            }
+            for item in reuniao.participantes
+        ]
+    return resposta
+
+
+def _reunioes_por_evento(eventos, usuario):
+    if not eventos:
+        return {}
+
+    eventos_por_id = {evento.id: evento for evento in eventos}
+    evento_ids = tuple(eventos_por_id)
+    eh_admin = usuario.tipo_usuario.lower() == "admin"
+    consulta = Reuniao.query.filter(Reuniao.culto_id.in_(evento_ids))
+    if eh_admin:
+        consulta = consulta.options(
+            selectinload(Reuniao.participantes).selectinload(
+                ReuniaoParticipante.usuario
+            )
+        )
+    reunioes = consulta.order_by(
+        Reuniao.inicio_em.asc(),
+        Reuniao.id.asc(),
+    ).all()
+    reuniao_ids = [reuniao.id for reuniao in reunioes]
+    if eh_admin:
+        escalados = set(evento_ids)
+        reunioes_com_usuario = set()
+    else:
+        escalados = {
+            evento_id
+            for (evento_id,) in db.session.query(EscalaMembro.culto_id)
+            .join(Culto, Culto.id == EscalaMembro.culto_id)
+            .filter(
+                EscalaMembro.usuario_id == usuario.id,
+                Culto.id.in_(evento_ids),
+                Culto.publicado.is_(True),
+            )
+            .all()
+        }
+        reunioes_com_usuario = set()
+        if reuniao_ids:
+            reunioes_com_usuario = {
+                reuniao_id
+                for (reuniao_id,) in db.session.query(
+                    ReuniaoParticipante.reuniao_id
+                ).filter(
+                    ReuniaoParticipante.usuario_id == usuario.id,
+                    ReuniaoParticipante.reuniao_id.in_(reuniao_ids),
+                ).all()
+            }
+
+    resultado = {evento_id: [] for evento_id in evento_ids}
+    for reuniao in reunioes:
+        evento = eventos_por_id[reuniao.culto_id]
+        autorizado = (
+            eh_admin
+            or reuniao.anfitriao_id == usuario.id
+            or reuniao.id in reunioes_com_usuario
+            or (evento.publicado and evento.id in escalados)
+        )
+        if autorizado:
+            resultado[evento.id].append(_reuniao_json(
+                reuniao,
+                usuario,
+                incluir_participantes=eh_admin,
+            ))
+    return resultado
+
+
+def _reunioes_autorizadas_do_evento(evento, usuario):
+    return _reunioes_por_evento([evento], usuario).get(evento.id, [])
+
+
 @app.route("/api/reunioes/status", methods=["GET"])
 @token_required
 def status_reunioes():
@@ -1981,9 +2384,29 @@ def status_reunioes():
 
 @app.route("/api/reunioes/token", methods=["POST"])
 @token_required
+@limiter.limit("30 per minute")
 def criar_token_reuniao():
     dados = request.get_json(silent=True) or {}
-    sala = _texto(dados, "room_name")
+    reuniao_id = dados.get("meeting_id")
+    reuniao = None
+    if reuniao_id is not None:
+        try:
+            reuniao_id = int(reuniao_id)
+        except (TypeError, ValueError):
+            return jsonify({"erro": "A reunião selecionada é inválida."}), 400
+        reuniao = Reuniao.query.filter_by(id=reuniao_id).first()
+        if not reuniao:
+            return jsonify({"erro": "Reunião não encontrada."}), 404
+        if not reuniao.pode_acessar(request.usuario_logado):
+            return jsonify({"erro": "Você não tem acesso a esta reunião."}), 403
+        if reuniao.status != "ativa":
+            return jsonify({
+                "erro": "A reunião ainda não está ativa ou já foi encerrada."
+            }), 409
+        sala = reuniao.codigo
+    else:
+        sala = _texto(dados, "room_name")
+
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{2,63}", sala):
         return jsonify({
             "erro": "O código da sala deve ter de 3 a 64 caracteres "
@@ -2003,6 +2426,9 @@ def criar_token_reuniao():
     servidor, chave, segredo = configuracao
     agora = int(datetime.now(timezone.utc).timestamp())
     identidade = f"usuario-{request.usuario_logado.id}-{uuid4().hex}"
+    pode_compartilhar_tela = (
+        reuniao is None or reuniao.permite_compartilhar_tela
+    )
     payload = {
         "iss": chave,
         "sub": identidade,
@@ -2016,6 +2442,11 @@ def criar_token_reuniao():
             "canPublish": True,
             "canSubscribe": True,
             "canPublishData": True,
+            "canPublishSources": (
+                ["camera", "microphone", "screen_share", "screen_share_audio"]
+                if pode_compartilhar_tela
+                else ["camera", "microphone"]
+            ),
         },
     }
     token = jwt.encode(payload, segredo, algorithm="HS256")
@@ -2024,6 +2455,178 @@ def criar_token_reuniao():
         "server_url": servidor,
         "room_name": sala,
         "participant_name": request.usuario_logado.nome,
+        "meeting_id": reuniao.id if reuniao else None,
+    }), 200
+
+
+@app.route("/api/eventos/<int:evento_id>/reunioes", methods=["GET"])
+@token_required
+def listar_reunioes_evento(evento_id):
+    evento = db.session.get(Culto, evento_id)
+    if not evento:
+        return jsonify({"erro": "Evento não encontrado."}), 404
+    usuario = request.usuario_logado
+    if usuario.tipo_usuario.lower() != "admin" and not evento.publicado:
+        return jsonify({"erro": "Este evento ainda não foi publicado."}), 403
+    return jsonify(_reunioes_autorizadas_do_evento(evento, usuario)), 200
+
+
+@app.route("/api/reunioes/<int:reuniao_id>", methods=["GET"])
+@token_required
+def detalhar_reuniao(reuniao_id):
+    consulta = Reuniao.query.filter_by(id=reuniao_id)
+    if request.usuario_logado.tipo_usuario.lower() == "admin":
+        consulta = consulta.options(
+            selectinload(Reuniao.participantes).selectinload(
+                ReuniaoParticipante.usuario
+            )
+        )
+    reuniao = consulta.first()
+    if not reuniao:
+        return jsonify({"erro": "Reunião não encontrada."}), 404
+    usuario = request.usuario_logado
+    if not reuniao.pode_acessar(usuario):
+        return jsonify({"erro": "Você não tem acesso a esta reunião."}), 403
+    return jsonify(_reuniao_json(
+        reuniao,
+        usuario,
+        incluir_participantes=usuario.tipo_usuario.lower() == "admin",
+    )), 200
+
+
+@app.route("/api/eventos/<int:evento_id>/reunioes", methods=["POST"])
+@admin_required
+def criar_reuniao_evento(evento_id):
+    evento = db.session.get(Culto, evento_id)
+    if not evento:
+        return jsonify({"erro": "Evento não encontrado."}), 404
+    dados, erro = _validar_agenda_reuniao(request.get_json(silent=True) or {})
+    if erro:
+        return jsonify({"erro": erro}), 400
+    usuarios, erro = _usuarios_participantes(dados["participantes_ids"])
+    if erro:
+        return jsonify({"erro": erro}), 400
+
+    codigo = f"louvor-{secrets.token_urlsafe(24)}"
+    reuniao = Reuniao(
+        codigo=codigo,
+        titulo=dados["titulo"],
+        descricao=dados["descricao"],
+        anfitriao_id=request.usuario_logado.id,
+        culto_id=evento_id,
+        status="agendada",
+        inicio_em=dados["inicio_em"],
+        termino_em=dados["termino_em"],
+        permite_compartilhar_tela=bool(
+            (request.get_json(silent=True) or {}).get(
+                "permite_compartilhar_tela",
+                True,
+            )
+        ),
+        sfu_provider="livekit",
+    )
+    reuniao.participantes = [
+        ReuniaoParticipante(usuario=usuario)
+        for usuario in usuarios
+    ]
+    try:
+        db.session.add(reuniao)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"erro": "Não foi possível reservar o código da reunião."}), 409
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Falha ao agendar reunião.")
+        return jsonify({"erro": "Não foi possível agendar a reunião."}), 500
+    return jsonify({
+        "mensagem": "Reunião agendada.",
+        "reuniao": _reuniao_json(
+            reuniao,
+            request.usuario_logado,
+            incluir_participantes=True,
+        ),
+    }), 201
+
+
+@app.route("/api/reunioes/<int:reuniao_id>", methods=["PUT"])
+@admin_required
+def editar_reuniao(reuniao_id):
+    reuniao = Reuniao.query.options(
+        selectinload(Reuniao.participantes)
+    ).filter_by(id=reuniao_id).first()
+    if not reuniao:
+        return jsonify({"erro": "Reunião não encontrada."}), 404
+    if reuniao.status != "agendada":
+        return jsonify({"erro": "Só é possível editar uma reunião agendada."}), 409
+    dados, erro = _validar_agenda_reuniao(request.get_json(silent=True) or {})
+    if erro:
+        return jsonify({"erro": erro}), 400
+    usuarios, erro = _usuarios_participantes(dados["participantes_ids"])
+    if erro:
+        return jsonify({"erro": erro}), 400
+
+    reuniao.titulo = dados["titulo"]
+    reuniao.descricao = dados["descricao"]
+    reuniao.inicio_em = dados["inicio_em"]
+    reuniao.termino_em = dados["termino_em"]
+    reuniao.permite_compartilhar_tela = bool(
+        (request.get_json(silent=True) or {}).get(
+            "permite_compartilhar_tela",
+            True,
+        )
+    )
+    reuniao.participantes = [
+        ReuniaoParticipante(usuario=usuario)
+        for usuario in usuarios
+    ]
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Falha ao atualizar reunião agendada.")
+        return jsonify({"erro": "Não foi possível atualizar a reunião."}), 500
+    return jsonify({
+        "mensagem": "Reunião atualizada.",
+        "reuniao": _reuniao_json(
+            reuniao,
+            request.usuario_logado,
+            incluir_participantes=True,
+        ),
+    }), 200
+
+
+@app.route("/api/reunioes/<int:reuniao_id>/status", methods=["POST"])
+@admin_required
+def atualizar_status_reuniao(reuniao_id):
+    reuniao = db.session.get(Reuniao, reuniao_id)
+    if not reuniao:
+        return jsonify({"erro": "Reunião não encontrada."}), 404
+    novo_status = _texto(
+        request.get_json(silent=True) or {},
+        "status",
+    ).lower()
+    transicoes = {
+        "agendada": {"ativa", "encerrada"},
+        "ativa": {"encerrada"},
+        "encerrada": set(),
+    }
+    if novo_status not in transicoes.get(reuniao.status, set()):
+        return jsonify({
+            "erro": "Transição de status inválida. Reuniões não podem ser reativadas após o encerramento."
+        }), 409
+    reuniao.status = novo_status
+    if novo_status == "encerrada":
+        reuniao.encerrado_em = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Falha ao atualizar o status da reunião.")
+        return jsonify({"erro": "Não foi possível atualizar o status da reunião."}), 500
+    return jsonify({
+        "mensagem": "Status da reunião atualizado.",
+        "reuniao": _reuniao_json(reuniao, request.usuario_logado),
     }), 200
 
 
@@ -2581,6 +3184,9 @@ def remover_membro(id):
 @app.route("/api/agenda", methods=["GET"])
 @token_required
 def listar_agenda():
+    paginacao, erro_paginacao = _paginacao_solicitada()
+    if erro_paginacao:
+        return jsonify({"erro": erro_paginacao}), 400
     consulta = Culto.query.order_by(
         Culto.data.asc(),
         Culto.hora.asc(),
@@ -2590,16 +3196,29 @@ def listar_agenda():
     if request.usuario_logado.tipo_usuario.lower() != "admin":
         consulta = consulta.filter_by(publicado=True)
 
-    cultos = consulta.all()
-    return jsonify([
-        _culto_dict(
-            culto,
-            request.usuario_logado.id
-            if request.usuario_logado.tipo_usuario.lower() != "admin"
-            else None
+    total = consulta.order_by(None).count() if paginacao else None
+    if paginacao:
+        consulta = consulta.limit(paginacao["limit"]).offset(
+            paginacao["offset"]
         )
-        for culto in cultos
-    ]), 200
+    cultos = consulta.all()
+    reunioes_por_evento = _reunioes_por_evento(
+        cultos,
+        request.usuario_logado,
+    )
+    usuario_id = (
+        request.usuario_logado.id
+        if request.usuario_logado.tipo_usuario.lower() != "admin"
+        else None
+    )
+    resposta = _cultos_dict(
+        cultos,
+        usuario_id,
+        reunioes_por_evento,
+    )
+    if paginacao:
+        return _resposta_paginada(resposta, total, paginacao)
+    return jsonify(resposta), 200
 
 
 @app.route("/api/eventos/<int:id>", methods=["GET"])
@@ -2619,6 +3238,10 @@ def detalhar_evento(id):
     return jsonify(_culto_dict(
         culto,
         None if eh_admin else request.usuario_logado.id,
+        reunioes=_reunioes_autorizadas_do_evento(
+            culto,
+            request.usuario_logado,
+        ),
     )), 200
 
 
@@ -3126,28 +3749,98 @@ def listar_escalas_membro(usuario_id):
     if not usuario or usuario.tipo_usuario.lower() != "membro":
         return jsonify({"erro": "Membro não encontrado."}), 404
 
-    escalas = EscalaMembro.query.filter_by(
-        usuario_id=usuario_id
-    ).order_by(EscalaMembro.culto_id.asc()).all()
-    return jsonify([
-        {
-            "escala": _escala_dict(escala),
-            "evento": {
-                "id": culto.id,
-                "titulo": culto.titulo,
-                "data": culto.data,
-                "hora": culto.hora or "",
-                "local": culto.local or "",
-                "publicado": bool(culto.publicado),
-            },
-        }
-        for escala in escalas
-        if (culto := db.session.get(Culto, escala.culto_id)) is not None
-        and (
-            request.usuario_logado.tipo_usuario.lower() == "admin"
-            or culto.publicado
+    eh_admin = request.usuario_logado.tipo_usuario.lower() == "admin"
+    consulta = db.session.query(EscalaMembro, Culto).join(
+        Culto,
+        Culto.id == EscalaMembro.culto_id,
+    ).filter(
+        EscalaMembro.usuario_id == usuario_id,
+    )
+    if not eh_admin:
+        consulta = consulta.filter(Culto.publicado.is_(True))
+    registros = consulta.order_by(
+        Culto.data.asc(),
+        Culto.hora.asc(),
+        Culto.id.asc(),
+    ).all()
+    if not registros:
+        return jsonify([]), 200
+
+    evento_ids = {culto.id for _, culto in registros}
+    cultos = list({culto.id: culto for _, culto in registros}.values())
+    usuario_troca = aliased(Usuario)
+    escalas_com_membros = db.session.query(
+        EscalaMembro,
+        Usuario,
+        usuario_troca,
+    ).join(
+        Usuario,
+        Usuario.id == EscalaMembro.usuario_id,
+    ).outerjoin(
+        usuario_troca,
+        usuario_troca.id == EscalaMembro.troca_para_usuario_id,
+    ).filter(
+        EscalaMembro.culto_id.in_(evento_ids),
+    ).all()
+    opcoes_por_evento_funcao = {}
+    membros_por_escala = {}
+    for escala, membro, destino_troca in escalas_com_membros:
+        membros_por_escala[escala.id] = (membro, destino_troca)
+        if escala.usuario_id == usuario_id:
+            continue
+        opcoes_por_evento_funcao.setdefault(
+            (escala.culto_id, escala.funcao),
+            [],
+        ).append({
+            "usuario_id": escala.usuario_id,
+            "nome": f"{membro.nome} {membro.sobrenome}".strip(),
+            "funcao": escala.funcao,
+        })
+
+    reunioes_por_evento = _reunioes_por_evento(
+        cultos,
+        request.usuario_logado,
+    )
+    eventos = {
+        evento["id"]: evento
+        for evento in _cultos_dict(
+            cultos,
+            None if eh_admin else request.usuario_logado.id,
+            reunioes_por_evento,
         )
-    ]), 200
+    }
+    resposta = []
+    for escala, culto in registros:
+        usuario, destino_troca = membros_por_escala[escala.id]
+        resposta.append({
+            "escala": {
+                "id": escala.id,
+                "evento_id": escala.culto_id,
+                "usuario_id": escala.usuario_id,
+                "nome": f"{usuario.nome} {usuario.sobrenome}".strip(),
+                "email": usuario.email,
+                "funcao": escala.funcao,
+                "confirmado": bool(escala.confirmado),
+                "status": _status_escala(escala),
+                "troca_para": (
+                    {
+                        "usuario_id": destino_troca.id,
+                        "nome": (
+                            f"{destino_troca.nome} "
+                            f"{destino_troca.sobrenome}"
+                        ).strip(),
+                    }
+                    if destino_troca
+                    else None
+                ),
+            },
+            "evento": eventos[culto.id],
+            "opcoes_troca": opcoes_por_evento_funcao.get(
+                (escala.culto_id, escala.funcao),
+                [],
+            ),
+        })
+    return jsonify(resposta), 200
 
 
 @app.route("/api/eventos/<int:id>/escala", methods=["POST"])
@@ -3509,6 +4202,14 @@ def excluir_culto(id):
         return jsonify({"erro": "Culto não encontrado."}), 404
 
     try:
+        ReuniaoParticipante.query.filter(
+            ReuniaoParticipante.reuniao_id.in_(
+                db.session.query(Reuniao.id).filter_by(culto_id=id)
+            )
+        ).delete(synchronize_session=False)
+        Reuniao.query.filter_by(culto_id=id).delete(
+            synchronize_session=False
+        )
         EscalaMembro.query.filter_by(culto_id=id).delete()
         CultoLouvor.query.filter_by(culto_id=id).delete()
         Notificacao.query.filter_by(evento_id=id).delete(

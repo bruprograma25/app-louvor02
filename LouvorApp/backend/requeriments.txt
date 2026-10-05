@@ -7,3 +7,6 @@ Flask-Migrate>=4.0,<5
 psycopg2-binary>=2.9,<3
 gunicorn>=22,<24
 Werkzeug>=3.0
+flask-socketio>=5.6.1
+simple-websocket>=1.1.0
+Flask-Limiter[redis]>=3.12,<5

@@ -1,0 +1,382 @@
+services:
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: "1"
+      NETWORKS: "1"
+      SERVICES: "1"
+      TASKS: "1"
+      POST: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy-control
+    restart: unless-stopped
+
+  traefik:
+    image: traefik:v3.3
+    command:
+      - --providers.docker=true
+      - --providers.docker.endpoint=tcp://docker-socket-proxy:2375
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=louvor-edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.public.acme.email=${LETSENCRYPT_EMAIL:?Configure LETSENCRYPT_EMAIL}
+      - --certificatesresolvers.public.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.public.acme.httpchallenge=true
+      - --certificatesresolvers.public.acme.httpchallenge.entrypoint=web
+      - --accesslog=true
+      - --accesslog.format=json
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/letsencrypt
+    depends_on:
+      - docker-socket-proxy
+    networks:
+      - louvor-edge
+      - proxy-control
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.50
+
+  postgres:
+    image: postgres:16-alpine
+    entrypoint: ["sh", "/infra/postgres-entrypoint.sh"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-louvorapp}
+      POSTGRES_USER: ${POSTGRES_USER:-louvorapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres-entrypoint.sh:/infra/postgres-entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - data
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: 2.00
+
+  redis:
+    image: redis:7.4-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - data
+    restart: unless-stopped
+    mem_limit: 384m
+    cpus: 0.50
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["flask", "--app", "wsgi:app", "db", "upgrade"]
+    environment:
+      APP_ENV: production
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Configure JWT_SECRET_KEY}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-louvorapp}:${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-louvorapp}?sslmode=require
+      DATABASE_SSLMODE: require
+      AUTO_CREATE_SQLITE_SCHEMA: "false"
+      RATELIMIT_STORAGE_URI: redis://redis:6379/0
+      PROXY_FIX_HOPS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    profiles: ["migrate"]
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      FLASK_DEBUG: "false"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Configure JWT_SECRET_KEY}
+      JWT_EXPIRES_MINUTES: "120"
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-louvorapp}:${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-louvorapp}?sslmode=require
+      DATABASE_SSLMODE: require
+      AUTO_CREATE_SQLITE_SCHEMA: "false"
+      DB_POOL_SIZE: "5"
+      DB_MAX_OVERFLOW: "2"
+      DB_POOL_RECYCLE: "1800"
+      RATELIMIT_STORAGE_URI: redis://redis:6379/0
+      API_RATE_LIMIT: 600 per minute
+      PROXY_FIX_HOPS: "1"
+      CORS_ORIGINS: https://${PUBLIC_DOMAIN:?Configure PUBLIC_DOMAIN}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=louvor-edge
+      - traefik.http.services.louvor-api.loadbalancer.server.port=8000
+      - traefik.http.routers.louvor-api.rule=Host(`${PUBLIC_DOMAIN}`) && (PathPrefix(`/api`) || Path(`/health`))
+      - traefik.http.routers.louvor-api.entrypoints=websecure
+      - traefik.http.routers.louvor-api.tls.certresolver=public
+      - traefik.http.routers.louvor-api.priority=100
+    networks:
+      - louvor-edge
+      - data
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 40s
+    mem_limit: 768m
+    cpus: 1.00
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=louvor-edge
+      - traefik.http.services.louvor-frontend.loadbalancer.server.port=8080
+      - traefik.http.routers.louvor-frontend.rule=Host(`${PUBLIC_DOMAIN}`)
+      - traefik.http.routers.louvor-frontend.entrypoints=websecure
+      - traefik.http.routers.louvor-frontend.tls.certresolver=public
+      - traefik.http.routers.louvor-frontend.priority=1
+    networks:
+      - louvor-edge
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.25
+
+  locust:
+    build:
+      context: ./backend/loadtests
+      dockerfile: Dockerfile
+    command:
+      - --headless
+      - --users
+      - ${LOADTEST_USERS:-1100}
+      - --spawn-rate
+      - ${LOADTEST_SPAWN_RATE:-50}
+      - --run-time
+      - ${LOADTEST_DURATION:-5m}
+      - --csv
+      - /reports/${LOADTEST_RUN_ID:-baseline}
+      - --html
+      - /reports/${LOADTEST_RUN_ID:-baseline}.html
+    environment:
+      LOADTEST_USERS_FILE: /reports/users.csv
+      LOADTEST_HOST: http://api-loadtest:8000
+    volumes:
+      - ./backend/loadtests/reports:/reports
+    profiles: ["loadtest"]
+    depends_on:
+      api-loadtest:
+        condition: service_healthy
+    networks:
+      - loadtest-data
+    restart: "no"
+
+  postgres-loadtest:
+    image: postgres:16-alpine
+    entrypoint: ["sh", "/infra/postgres-entrypoint.sh"]
+    environment:
+      POSTGRES_DB: louvorapp_loadtest
+      POSTGRES_USER: ${LOADTEST_POSTGRES_USER:-louvorapp_loadtest}
+      POSTGRES_PASSWORD: ${LOADTEST_POSTGRES_PASSWORD:?Configure LOADTEST_POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-loadtest-data:/var/lib/postgresql/data
+      - ./infra/postgres-entrypoint.sh:/infra/postgres-entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - loadtest-data
+    profiles: ["loadtest", "loadtest-seed"]
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: 2.00
+
+  redis-loadtest:
+    image: redis:7.4-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis-loadtest-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - loadtest-data
+    profiles: ["loadtest", "loadtest-seed"]
+    restart: unless-stopped
+    mem_limit: 384m
+    cpus: 0.50
+
+  migrate-loadtest:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["flask", "--app", "wsgi:app", "db", "upgrade"]
+    environment:
+      APP_ENV: production
+      JWT_SECRET_KEY: ${LOADTEST_JWT_SECRET:?Configure LOADTEST_JWT_SECRET}
+      JWT_EXPIRES_MINUTES: "1440"
+      DATABASE_URL: postgresql+psycopg2://${LOADTEST_POSTGRES_USER:-louvorapp_loadtest}:${LOADTEST_POSTGRES_PASSWORD:?Configure LOADTEST_POSTGRES_PASSWORD}@postgres-loadtest:5432/louvorapp_loadtest?sslmode=require
+      DATABASE_SSLMODE: require
+      AUTO_CREATE_SQLITE_SCHEMA: "false"
+      DB_POOL_SIZE: "5"
+      DB_MAX_OVERFLOW: "2"
+      RATELIMIT_STORAGE_URI: redis://redis-loadtest:6379/0
+      CORS_ORIGINS: https://loadtest.invalid
+      PROXY_FIX_HOPS: "0"
+    depends_on:
+      postgres-loadtest:
+        condition: service_healthy
+      redis-loadtest:
+        condition: service_healthy
+    networks:
+      - loadtest-data
+    profiles: ["loadtest-seed"]
+
+  seed-loadtest:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "loadtests/seed_users.py"]
+    environment:
+      APP_ENV: production
+      JWT_SECRET_KEY: ${LOADTEST_JWT_SECRET:?Configure LOADTEST_JWT_SECRET}
+      JWT_EXPIRES_MINUTES: "1440"
+      DATABASE_URL: postgresql+psycopg2://${LOADTEST_POSTGRES_USER:-louvorapp_loadtest}:${LOADTEST_POSTGRES_PASSWORD:?Configure LOADTEST_POSTGRES_PASSWORD}@postgres-loadtest:5432/louvorapp_loadtest?sslmode=require
+      DATABASE_SSLMODE: require
+      AUTO_CREATE_SQLITE_SCHEMA: "false"
+      DB_POOL_SIZE: "5"
+      DB_MAX_OVERFLOW: "2"
+      RATELIMIT_STORAGE_URI: redis://redis-loadtest:6379/0
+      CORS_ORIGINS: https://loadtest.invalid
+      PROXY_FIX_HOPS: "0"
+      LOADTEST_SEED_CONFIRM: ${LOADTEST_SEED_CONFIRM:-}
+      LOADTEST_SEED_USERS: ${LOADTEST_USERS:-1100}
+      LOADTEST_USERS_OUTPUT: /app/loadtests/reports/users.csv
+    volumes:
+      - ./backend/loadtests/reports:/app/loadtests/reports
+    depends_on:
+      postgres-loadtest:
+        condition: service_healthy
+      redis-loadtest:
+        condition: service_healthy
+    networks:
+      - loadtest-data
+    profiles: ["loadtest-seed"]
+    restart: "no"
+
+  api-loadtest:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      FLASK_DEBUG: "false"
+      JWT_SECRET_KEY: ${LOADTEST_JWT_SECRET:?Configure LOADTEST_JWT_SECRET}
+      JWT_EXPIRES_MINUTES: "1440"
+      DATABASE_URL: postgresql+psycopg2://${LOADTEST_POSTGRES_USER:-louvorapp_loadtest}:${LOADTEST_POSTGRES_PASSWORD:?Configure LOADTEST_POSTGRES_PASSWORD}@postgres-loadtest:5432/louvorapp_loadtest?sslmode=require
+      DATABASE_SSLMODE: require
+      AUTO_CREATE_SQLITE_SCHEMA: "false"
+      DB_POOL_SIZE: "5"
+      DB_MAX_OVERFLOW: "2"
+      DB_POOL_RECYCLE: "1800"
+      RATELIMIT_STORAGE_URI: redis://redis-loadtest:6379/0
+      API_RATE_LIMIT: 60000 per minute
+      PROXY_FIX_HOPS: "0"
+      CORS_ORIGINS: https://loadtest.invalid
+    depends_on:
+      postgres-loadtest:
+        condition: service_healthy
+      redis-loadtest:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - loadtest-data
+    profiles: ["loadtest"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 40s
+    mem_limit: 768m
+    cpus: 1.00
+
+networks:
+  louvor-edge:
+    name: louvor-edge
+  data:
+    internal: true
+  proxy-control:
+    internal: true
+  loadtest-data:
+    internal: true
+
+volumes:
+  postgres-data:
+  redis-data:
+  postgres-loadtest-data:
+  redis-loadtest-data:
+  letsencrypt:
