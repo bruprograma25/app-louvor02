@@ -12,6 +12,7 @@ function Dashboard() {
   const [quantidadeMembros, setQuantidadeMembros] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
 
   // =====================================================
   // BUSCAR QUANTIDADE DE LOUVORES
@@ -90,6 +91,72 @@ function Dashboard() {
     window.location.href = "/minha-agenda";
   }
 
+  function inicialUsuario(nome) {
+    const base = nome?.trim();
+    if (!base) return "U";
+    return base.charAt(0).toUpperCase();
+  }
+
+  async function alterarFotoPerfil(event) {
+    const arquivo = event.target.files?.[0];
+    if (!arquivo) {
+      return;
+    }
+
+    if (!arquivo.type.startsWith("image/")) {
+      setErro("Selecione uma imagem válida para a foto de perfil.");
+      event.target.value = "";
+      return;
+    }
+
+    if (arquivo.size > 4 * 1024 * 1024) {
+      setErro("A foto deve ter no máximo 4 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    const leitor = new FileReader();
+    leitor.onload = async () => {
+      const foto = String(leitor.result || "");
+      if (!foto.startsWith("data:image/")) {
+        setErro("Não foi possível ler a imagem selecionada.");
+        event.target.value = "";
+        return;
+      }
+
+      try {
+        setEnviandoFoto(true);
+        const resposta = await api.post("/api/usuario/foto", {
+          foto_perfil: foto,
+        });
+
+        const usuarioAtualizado = {
+          ...usuario,
+          ...resposta.data.usuario,
+        };
+
+        localStorage.setItem("usuario", JSON.stringify(usuarioAtualizado));
+        window.location.reload();
+      } catch (error) {
+        setErro(
+          error.response?.data?.erro ||
+          "Não foi possível atualizar sua foto de perfil."
+        );
+      } finally {
+        setEnviandoFoto(false);
+        event.target.value = "";
+      }
+    };
+
+    leitor.onerror = () => {
+      setErro("Não foi possível ler a imagem selecionada.");
+      event.target.value = "";
+      setEnviandoFoto(false);
+    };
+
+    leitor.readAsDataURL(arquivo);
+  }
+
   // =====================================================
   // INTERFACE
   // =====================================================
@@ -119,9 +186,25 @@ function Dashboard() {
 
           <div className="user-area">
 
-            <div className="user-avatar">
-              U
-            </div>
+            <label className="user-avatar-upload" title="Trocar foto de perfil">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={alterarFotoPerfil}
+                disabled={enviandoFoto}
+              />
+              {usuario?.foto_perfil ? (
+                <img
+                  className="user-avatar"
+                  src={usuario.foto_perfil}
+                  alt={usuario?.nome || "Foto de perfil"}
+                />
+              ) : (
+                <div className="user-avatar">
+                  {inicialUsuario(usuario?.nome || "Usuário")}
+                </div>
+              )}
+            </label>
 
             <span>
               {usuario?.nome || "Usuário"}

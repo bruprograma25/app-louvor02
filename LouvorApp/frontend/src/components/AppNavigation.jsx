@@ -49,7 +49,7 @@ function AppNavigation() {
     <header className="app-navigation">
       <a className="app-brand" href="/" aria-label="LouvorApp — Dashboard">
         <span className="app-brand-icon" aria-hidden="true">
-          <Music2 size={21} />
+          <img src="/church-brand.svg" alt="" />
         </span>
         <span>Louvor<span className="app-brand-highlight">App</span></span>
       </a>

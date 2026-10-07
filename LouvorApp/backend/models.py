@@ -57,6 +57,11 @@ class Usuario(db.Model):
         nullable=True
     )
 
+    foto_perfil = db.Column(
+        db.String(5000),
+        nullable=True
+    )
+
     criado_em = db.Column(
         db.DateTime,
         nullable=False,
@@ -72,6 +77,7 @@ class Usuario(db.Model):
             "email": self.email,
             "tipo_usuario": self.tipo_usuario,
             "funcao_principal": self.funcao_principal or "",
+            "foto_perfil": self.foto_perfil or "",
             "criado_em": (
                 self.criado_em.isoformat()
                 if self.criado_em

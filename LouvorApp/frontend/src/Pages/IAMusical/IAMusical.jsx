@@ -307,7 +307,7 @@ function IAMusical() {
               (statusIa?.provedor_configurado
                 ? "Serviço de IA configurado no backend."
                 : statusIa
-                  ? "Sem IA externa: respostas automáticas locais para conceitos musicais comuns. Configure AI_API_KEY no backend para perguntas abertas."
+                  ? "Sem IA externa: respostas automáticas locais para conceitos musicais comuns. Configure AI_API_KEY ou OPENAI_API_KEY no backend para perguntas abertas."
                   : "Verificando serviço de IA...")}
           </p>
         </div>

@@ -5,7 +5,7 @@ import secrets
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import uuid4
@@ -60,6 +60,42 @@ def _email_valido(email):
     )
 
 
+def _funcao_principal_valida(valor):
+    if not isinstance(valor, str):
+        return None
+
+    texto = unicodedata.normalize("NFKD", valor.strip())
+    texto = texto.encode("ascii", "ignore").decode("ascii")
+    normalizado = re.sub(r"[^a-z0-9]+", " ", texto.casefold()).strip()
+    if not normalizado:
+        return None
+
+    aliases = {
+        "ministro": "Ministro",
+        "back": "Back vocal",
+        "back vocal": "Back vocal",
+        "back vocal vocal": "Back vocal",
+        "instrumentista": "Instrumentista",
+        "teclado": "Teclado",
+        "bateria": "Bateria",
+        "guitarra": "Guitarra",
+        "baixo": "Baixo",
+        "violao": "Violão",
+        "violão": "Violão",
+        "cantor": "Cantor",
+        "cantora": "Cantora",
+        "lider": "Líder",
+        "líder": "Líder",
+        "outro": "Outro",
+        "membro": "Membro",
+    }
+
+    if normalizado in {"administrador", "admin"}:
+        return None
+
+    return aliases.get(normalizado)
+
+
 def _url_valida(valor):
     if not valor:
         return True
@@ -111,6 +147,19 @@ def _resposta_paginada(dados, total, paginacao):
     return resposta, 200
 
 
+def _credenciais_ia():
+    chave = (
+        os.getenv("AI_API_KEY", "")
+        or os.getenv("OPENAI_API_KEY", "")
+    ).strip()
+    modelo = (
+        os.getenv("AI_MODEL", "")
+        or os.getenv("OPENAI_MODEL", "")
+        or "gpt-4o-mini"
+    ).strip() or "gpt-4o-mini"
+    return chave, modelo
+
+
 def _validar_dados_louvor(dados):
     limites = {
         "titulo": 200,
@@ -133,6 +182,90 @@ def _validar_dados_louvor(dados):
     if not _url_valida(_texto(dados, "imagem")):
         return "A imagem precisa ser uma URL HTTP ou HTTPS válida."
     return None
+
+
+def _extrair_metadados_og(html):
+    resultado = {}
+    padrao_meta = re.compile(
+        r"<meta[^>]+(?:property|name)=[\"']([^\"']+)[\"'][^>]*content=[\"']([^\"']*)[\"'][^>]*>",
+        re.IGNORECASE,
+    )
+    for nome, valor in padrao_meta.findall(html):
+        chave = nome.strip().lower()
+        if chave.startswith("og:"):
+            resultado[chave[3:]] = valor.strip()
+        elif chave in {"title", "description", "image"}:
+            resultado[chave] = valor.strip()
+    return resultado
+
+
+def _metadados_musica_por_url(url):
+    url = (url or "").strip()
+    if not url:
+        return {}
+
+    host = urlparse(url).netloc.lower()
+    metadados = {"titulo": "", "artista": "", "imagem": "", "letra": ""}
+
+    def preencher_geral(dados):
+        if not metadados["titulo"]:
+            metadados["titulo"] = dados.get("title") or dados.get("og:title") or ""
+        if not metadados["artista"]:
+            metadados["artista"] = (
+                dados.get("artist")
+                or dados.get("author")
+                or dados.get("og:site_name")
+                or ""
+            )
+        if not metadados["imagem"]:
+            metadados["imagem"] = dados.get("image") or dados.get("og:image") or ""
+        if not metadados["letra"]:
+            descricao = (dados.get("description") or dados.get("og:description") or "").strip()
+            if descricao:
+                metadados["letra"] = descricao
+
+    try:
+        if "youtube.com" in host or "youtu.be" in host:
+            oembed_url = "https://www.youtube.com/oembed?url=" + quote(url, safe="") + "&format=json"
+            requisicao = Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(requisicao, timeout=15) as resposta:
+                dados = json.loads(resposta.read().decode("utf-8", errors="replace"))
+            metadados["titulo"] = dados.get("title", "")
+            metadados["artista"] = dados.get("author_name", "")
+            metadados["imagem"] = dados.get("thumbnail_url", "")
+            metadados["letra"] = ""
+            return metadados
+
+        if "spotify.com" in host:
+            oembed_url = "https://open.spotify.com/oembed?url=" + quote(url, safe="")
+            requisicao = Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(requisicao, timeout=15) as resposta:
+                dados = json.loads(resposta.read().decode("utf-8", errors="replace"))
+            metadados["titulo"] = dados.get("title", "")
+            metadados["artista"] = dados.get("author_name", "") or dados.get("author", "")
+            metadados["imagem"] = dados.get("thumbnail_url", "")
+            metadados["letra"] = ""
+            return metadados
+
+        requisicao = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(requisicao, timeout=15) as resposta:
+            pagina = resposta.read().decode("utf-8", errors="replace")
+        dados_og = _extrair_metadados_og(pagina)
+        preencher_geral(dados_og)
+
+        if "cifraclub.com" in host and not metadados["titulo"]:
+            titulo = re.search(r"<title>(.*?)</title>", pagina, re.IGNORECASE | re.DOTALL)
+            if titulo:
+                metadados["titulo"] = re.sub(r"\s+-\s+Cifra Club.*$", "", titulo.group(1)).strip()
+        if "cifraclub.com" in host and not metadados["artista"]:
+            autor = re.search(r"cifra.*?de\s+([^<]+)", pagina, re.IGNORECASE | re.DOTALL)
+            if autor:
+                metadados["artista"] = autor.group(1).strip()
+
+    except Exception:
+        return {}
+
+    return {chave: valor for chave, valor in metadados.items() if valor}
 
 
 def _validar_dados_evento(dados):
@@ -599,15 +732,14 @@ def _gerar_resposta_local_musical(pergunta, louvores, analise_vocal=None):
 
 
 def _gerar_resposta_ia_musical(mensagens, louvores, analise_vocal=None):
-    chave = os.getenv("AI_API_KEY", "").strip()
+    chave, modelo = _credenciais_ia()
     if not chave:
         raise _ErroServicoIa(
             "O assistente musical ainda não está configurado. "
-            "O administrador precisa definir AI_API_KEY nos segredos do backend.",
+            "O administrador precisa definir AI_API_KEY ou OPENAI_API_KEY nos segredos do backend.",
             503,
         )
 
-    modelo = os.getenv("AI_MODEL", "gpt-4o-mini").strip()
     if not modelo or len(modelo) > 100:
         raise _ErroServicoIa("O modelo do assistente musical está inválido.", 503)
 
@@ -815,13 +947,30 @@ if DATABASE_POOL_SIZE < 1 or DATABASE_MAX_OVERFLOW < 0 or DATABASE_POOL_RECYCLE 
         "e reciclagem de no mínimo 60 segundos."
     )
 
+origens_padrao = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+]
+for _porta in range(5174, 5181):
+    origens_padrao.extend([
+        f"http://localhost:{_porta}",
+        f"http://127.0.0.1:{_porta}",
+    ])
+for _porta in range(4174, 4181):
+    origens_padrao.extend([
+        f"http://localhost:{_porta}",
+        f"http://127.0.0.1:{_porta}",
+    ])
+
+valor_cors = os.getenv("CORS_ORIGINS")
+if not valor_cors:
+    valor_cors = ",".join(origens_padrao)
+
 origens_cors = [
     origem.strip()
-    for origem in os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,"
-        "http://localhost:4173,http://127.0.0.1:4173",
-    ).split(",")
+    for origem in valor_cors.split(",")
     if origem.strip()
 ]
 if os.getenv("APP_ENV", "").lower() == "production":
@@ -851,10 +1000,16 @@ CORS(
 )
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "").strip()
+if not JWT_SECRET_KEY and os.getenv("APP_ENV", "").lower() != "production":
+    JWT_SECRET_KEY = "dev-louvorapp-2026-rotation-secret-20261006"
+
 if len(JWT_SECRET_KEY.encode("utf-8")) < 32:
     raise RuntimeError(
         "Configure JWT_SECRET_KEY com uma chave aleatória de pelo menos 32 bytes."
     )
+
+DEFAULT_ADMIN_EMAIL = os.getenv("DEFAULT_ADMIN_EMAIL", "admin3@igreja.com").strip().lower()
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "123456").strip()
 
 try:
     JWT_EXPIRES_MINUTES = int(os.getenv("JWT_EXPIRES_MINUTES", "120"))
@@ -873,8 +1028,18 @@ def _criar_token(usuario):
         "iss": "louvorapp",
         "iat": agora,
         "exp": agora + timedelta(minutes=JWT_EXPIRES_MINUTES),
+        "session_version": 20261006,
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
+
+
+def _usuario_eh_admin_principal(usuario):
+    return bool(
+        usuario
+        and usuario.email
+        and usuario.email.lower() == DEFAULT_ADMIN_EMAIL
+        and getattr(usuario, "tipo_usuario", "").lower() == "admin"
+    )
 
 
 def token_required(funcao):
@@ -895,11 +1060,14 @@ def proteger_api_por_padrao():
     if not request.path.startswith("/api/") or request.method == "OPTIONS":
         return None
 
-    if (
-        request.path in ("/api/cadastro", "/api/login")
-        and request.method == "POST"
-    ):
-        return validar_corpo_json()
+    rotas_publicas = {
+        ("/api/cadastro", "POST"),
+        ("/api/login", "POST"),
+        ("/api/reunioes/status", "GET"),
+        ("/api/healthz", "GET"),
+    }
+    if (request.path, request.method.upper()) in rotas_publicas:
+        return validar_corpo_json() if request.path in ("/api/cadastro", "/api/login") else None
 
     cabecalho = request.headers.get("Authorization", "")
     partes = cabecalho.split()
@@ -916,8 +1084,10 @@ def proteger_api_por_padrao():
             JWT_SECRET_KEY,
             algorithms=["HS256"],
             issuer="louvorapp",
-            options={"require": ["exp", "iat", "sub", "iss"]},
+            options={"require": ["exp", "iat", "sub", "iss", "session_version"]},
         )
+        if payload.get("session_version") != 20261006:
+            raise jwt.InvalidTokenError("session_version inválida")
         usuario_id = int(payload["sub"])
     except (
         jwt.ExpiredSignatureError,
@@ -1036,6 +1206,20 @@ def admin_required(funcao):
         if request.usuario_logado.tipo_usuario.lower() != "admin":
             return jsonify({
                 "erro": "Apenas administradores podem executar esta ação."
+            }), 403
+
+        return funcao(*args, **kwargs)
+
+    return protegida
+
+
+def primary_admin_required(funcao):
+    @wraps(funcao)
+    @token_required
+    def protegida(*args, **kwargs):
+        if not _usuario_eh_admin_principal(request.usuario_logado):
+            return jsonify({
+                "erro": "Apenas o administrador principal pode realizar esta ação."
             }), 403
 
         return funcao(*args, **kwargs)
@@ -1444,6 +1628,36 @@ db.init_app(app)
 migrate = Migrate(app, db, compare_type=True)
 
 
+def garantir_admin_padrao():
+    if os.getenv("APP_ENV", "").lower() == "production":
+        return
+
+    email_padrao = DEFAULT_ADMIN_EMAIL
+    senha_padrao = DEFAULT_ADMIN_PASSWORD
+
+    if not email_padrao or not senha_padrao:
+        return
+
+    usuario = Usuario.query.filter_by(email=email_padrao).first()
+    if usuario:
+        if usuario.tipo_usuario.lower() != "admin":
+            usuario.tipo_usuario = "admin"
+            db.session.commit()
+        return
+
+    novo_usuario = Usuario(
+        nome="Admin",
+        sobrenome="Sistema",
+        email=email_padrao,
+        senha=generate_password_hash(senha_padrao),
+        tipo_usuario="admin",
+        funcao_principal="direcao musical",
+    )
+    db.session.add(novo_usuario)
+    db.session.commit()
+    print(f"ADMIN PADRÃO CRIADO: {email_padrao}")
+
+
 with app.app_context():
     try:
         if DATABASE_BACKEND != "sqlite":
@@ -1472,35 +1686,45 @@ with app.app_context():
 # =========================================================
 
 with app.app_context():
-    if (
-        DATABASE_BACKEND == "sqlite"
-        and AUTO_CREATE_SQLITE_SCHEMA == "true"
-    ):
-        db.create_all()
+    if DATABASE_BACKEND == "sqlite":
         tabelas = set(db.inspect(db.engine).get_table_names())
-        for tabela in ("louvores", "notificacoes"):
-            colunas = {
+        if "usuarios" in tabelas:
+            colunas_usuarios = {
                 coluna["name"]
-                for coluna in db.inspect(db.engine).get_columns(tabela)
+                for coluna in db.inspect(db.engine).get_columns("usuarios")
             }
-            if "local" not in colunas:
+            if "foto_perfil" not in colunas_usuarios:
                 db.session.execute(
-                    text(f"ALTER TABLE {tabela} ADD COLUMN local VARCHAR(200)")
+                    text("ALTER TABLE usuarios ADD COLUMN foto_perfil VARCHAR(5000)")
                 )
-        colunas_louvores = {
-            coluna["name"]
-            for coluna in db.inspect(db.engine).get_columns("louvores")
-        }
-        if "dono_id" not in colunas_louvores:
-            db.session.execute(text(
-                "ALTER TABLE louvores ADD COLUMN dono_id INTEGER "
-                "REFERENCES usuarios(id) ON DELETE SET NULL"
-            ))
-            db.session.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_louvores_dono_id "
-                "ON louvores (dono_id)"
-            ))
+        if AUTO_CREATE_SQLITE_SCHEMA == "true":
+            db.create_all()
+            tabelas = set(db.inspect(db.engine).get_table_names())
+            for tabela in ("louvores", "notificacoes"):
+                colunas = {
+                    coluna["name"]
+                    for coluna in db.inspect(db.engine).get_columns(tabela)
+                }
+                if "local" not in colunas:
+                    db.session.execute(
+                        text(f"ALTER TABLE {tabela} ADD COLUMN local VARCHAR(200)")
+                    )
+            colunas_louvores = {
+                coluna["name"]
+                for coluna in db.inspect(db.engine).get_columns("louvores")
+            }
+            if "dono_id" not in colunas_louvores:
+                db.session.execute(text(
+                    "ALTER TABLE louvores ADD COLUMN dono_id INTEGER "
+                    "REFERENCES usuarios(id) ON DELETE SET NULL"
+                ))
+                db.session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_louvores_dono_id "
+                    "ON louvores (dono_id)"
+                ))
         db.session.commit()
+
+        garantir_admin_padrao()
 
 
 # =========================================================
@@ -1619,6 +1843,15 @@ with app.app_context():
                 text(
                     "ALTER TABLE usuarios ADD COLUMN funcao_principal "
                     "VARCHAR(100)"
+                )
+            )
+            db.session.commit()
+
+        if "foto_perfil" not in colunas_usuarios:
+            db.session.execute(
+                text(
+                    "ALTER TABLE usuarios ADD COLUMN foto_perfil "
+                    "VARCHAR(5000)"
                 )
             )
             db.session.commit()
@@ -1763,6 +1996,10 @@ def cadastrar_usuario():
 
     confirmar_senha = _texto(dados, "confirmarSenha")
 
+    funcao_principal = _funcao_principal_valida(
+        dados.get("funcao_principal")
+    )
+
     # -----------------------------------------------------
     # VALIDAÇÕES
     # -----------------------------------------------------
@@ -1794,6 +2031,11 @@ def cadastrar_usuario():
 
         return jsonify({
             "erro": "Senha não informada."
+        }), 400
+
+    if not funcao_principal:
+        return jsonify({
+            "erro": "Selecione uma função válida para sua participação. Função de administrador não é permitida."
         }), 400
 
     if len(senha) < 6:
@@ -1849,6 +2091,7 @@ def cadastrar_usuario():
     novo_usuario.email = email
     novo_usuario.senha = senha_hash
     novo_usuario.tipo_usuario = "membro"
+    novo_usuario.funcao_principal = funcao_principal
 
     # -----------------------------------------------------
     # SALVA
@@ -1952,6 +2195,38 @@ def login():
         "usuario": usuario.to_dict(),
         "token": _criar_token(usuario)
 
+    }), 200
+
+
+@app.route("/api/usuario/foto", methods=["POST"])
+@token_required
+def atualizar_foto_perfil():
+    dados = request.get_json(silent=True) or {}
+    foto = _texto(dados, "foto_perfil")
+
+    if foto and len(foto) > 5000:
+        return jsonify({"erro": "A foto de perfil deve ter até 5.000 caracteres."}), 400
+
+    if foto and not (
+        foto.startswith("data:image/")
+        or _url_valida(foto)
+    ):
+        return jsonify({
+            "erro": "Use uma URL ou uma imagem em data URL válida para a foto de perfil."
+        }), 400
+
+    request.usuario_logado.foto_perfil = foto or None
+
+    try:
+        db.session.commit()
+    except Exception as erro:
+        db.session.rollback()
+        print("ERRO AO ATUALIZAR FOTO DE PERFIL:", erro)
+        return jsonify({"erro": "Erro ao atualizar a foto de perfil."}), 500
+
+    return jsonify({
+        "mensagem": "Foto de perfil atualizada com sucesso.",
+        "usuario": request.usuario_logado.to_dict(),
     }), 200
 
 
@@ -2182,10 +2457,9 @@ def conversar_com_ia_musical():
 @app.route("/api/ia-musical/status", methods=["GET"])
 @token_required
 def status_ia_musical():
+    chave, _ = _credenciais_ia()
     return jsonify({
-        "provedor_configurado": bool(
-            os.getenv("AI_API_KEY", "").strip()
-        ),
+        "provedor_configurado": bool(chave),
         "respostas_locais_disponiveis": True,
     }), 200
 
@@ -2375,10 +2649,18 @@ def _reunioes_autorizadas_do_evento(evento, usuario):
 
 
 @app.route("/api/reunioes/status", methods=["GET"])
-@token_required
 def status_reunioes():
     return jsonify({
         "disponivel": _livekit_configuracao() is not None,
+    }), 200
+
+
+@app.route("/api/healthz", methods=["GET"])
+def healthz():
+    return jsonify({
+        "status": "ok",
+        "servico": "louvorapp",
+        "reunioes_disponiveis": _livekit_configuracao() is not None,
     }), 200
 
 
@@ -2495,7 +2777,7 @@ def detalhar_reuniao(reuniao_id):
 
 
 @app.route("/api/eventos/<int:evento_id>/reunioes", methods=["POST"])
-@admin_required
+@primary_admin_required
 def criar_reuniao_evento(evento_id):
     evento = db.session.get(Culto, evento_id)
     if not evento:
@@ -2550,7 +2832,7 @@ def criar_reuniao_evento(evento_id):
 
 
 @app.route("/api/reunioes/<int:reuniao_id>", methods=["PUT"])
-@admin_required
+@primary_admin_required
 def editar_reuniao(reuniao_id):
     reuniao = Reuniao.query.options(
         selectinload(Reuniao.participantes)
@@ -2597,7 +2879,7 @@ def editar_reuniao(reuniao_id):
 
 
 @app.route("/api/reunioes/<int:reuniao_id>/status", methods=["POST"])
-@admin_required
+@primary_admin_required
 def atualizar_status_reuniao(reuniao_id):
     reuniao = db.session.get(Reuniao, reuniao_id)
     if not reuniao:
@@ -2634,8 +2916,56 @@ def atualizar_status_reuniao(reuniao_id):
 # CADASTRAR LOUVOR
 # =========================================================
 
-@app.route("/api/louvores", methods=["POST"])
+@app.route("/api/louvores/importar-url", methods=["POST"])
 @token_required
+def importar_louvor_por_url():
+    dados = request.get_json(silent=True) or {}
+    url = _texto(dados, "url")
+    if not url:
+        return jsonify({"erro": "Informe uma URL válida de uma música."}), 400
+    if not _url_valida(url):
+        return jsonify({"erro": "A URL informada não é válida."}), 400
+
+    metadados = _metadados_musica_por_url(url)
+    titulo = (metadados.get("titulo") or "").strip()
+    artista = (metadados.get("artista") or "").strip()
+    imagem = (metadados.get("imagem") or "").strip()
+    letra = (metadados.get("letra") or "").strip()
+
+    if not titulo:
+        return jsonify({
+            "erro": "Não foi possível identificar o título da música neste link."
+        }), 422
+
+    novo_louvor = Louvor()
+    novo_louvor.titulo = titulo
+    novo_louvor.artista = artista or "Artista não informado"
+    novo_louvor.local = "Importado da web"
+    novo_louvor.tom = _texto(dados, "tom")
+    novo_louvor.bpm = None
+    novo_louvor.categoria = _texto(dados, "categoria") or "Importado"
+    novo_louvor.letra = letra
+    novo_louvor.estrutura_letra = ""
+    novo_louvor.link = url
+    novo_louvor.imagem = imagem
+    novo_louvor.dono_id = request.usuario_logado.id
+
+    try:
+        db.session.add(novo_louvor)
+        db.session.commit()
+    except Exception as erro:
+        db.session.rollback()
+        print("ERRO AO IMPORTAR LOUVOR POR URL:", erro)
+        return jsonify({"erro": "Erro ao importar a música."}), 500
+
+    return jsonify({
+        "mensagem": "Música importada com sucesso.",
+        "louvor": novo_louvor.to_dict(),
+    }), 201
+
+
+@app.route("/api/louvores", methods=["POST"])
+@primary_admin_required
 def cadastrar_louvor():
 
     dados = request.get_json(silent=True)
@@ -2809,7 +3139,7 @@ def buscar_louvor(id):
     "/api/louvores/<int:id>",
     methods=["PUT"]
 )
-@token_required
+@primary_admin_required
 def editar_louvor(id):
 
     louvor = db.session.get(
@@ -2951,7 +3281,7 @@ def editar_louvor(id):
     "/api/louvores/<int:id>",
     methods=["DELETE"]
 )
-@token_required
+@primary_admin_required
 def excluir_louvor(id):
 
     louvor = db.session.get(
@@ -3003,7 +3333,7 @@ def excluir_louvor(id):
 
 
 @app.route("/api/agenda/membros", methods=["GET"])
-@admin_required
+@primary_admin_required
 def listar_membros_agenda():
     membros = Usuario.query.filter(
         db.func.lower(Usuario.tipo_usuario) == "membro"
@@ -3018,6 +3348,7 @@ def listar_membros_agenda():
             "email": membro.email,
             "tipo_usuario": membro.tipo_usuario,
             "funcao_principal": membro.funcao_principal or "",
+            "foto_perfil": membro.foto_perfil or "",
         }
         for membro in membros
     ]), 200
@@ -3032,27 +3363,32 @@ def _membro_dict(membro):
         "email": membro.email,
         "tipo_usuario": membro.tipo_usuario,
         "funcao_principal": membro.funcao_principal or "",
+        "foto_perfil": membro.foto_perfil or "",
     }
 
 
 @app.route("/api/membros", methods=["POST"])
-@admin_required
+@primary_admin_required
 def cadastrar_membro():
     dados = request.get_json(silent=True) or {}
     nome = _texto(dados, "nome")
     sobrenome = _texto(dados, "sobrenome")
     email = _texto(dados, "email").lower()
     senha = _texto(dados, "senha")
-    funcao = _texto(dados, "funcao_principal")
+    funcao = _funcao_principal_valida(dados.get("funcao_principal"))
 
     if not nome or not sobrenome or not email or not senha:
         return jsonify({
             "erro": "Nome, sobrenome, e-mail e senha são obrigatórios."
         }), 400
+    if funcao is None and "funcao_principal" in dados and _texto(dados, "funcao_principal"):
+        return jsonify({
+            "erro": "Informe uma função válida para o membro. A função de administrador não é permitida."
+        }), 400
     if (
         len(nome) > 100
         or len(sobrenome) > 100
-        or len(funcao) > 100
+        or (funcao is not None and len(funcao) > 100)
         or not _email_valido(email)
     ):
         return jsonify({
@@ -3071,7 +3407,7 @@ def cadastrar_membro():
         email=email,
         senha=generate_password_hash(senha),
         tipo_usuario="membro",
-        funcao_principal=funcao or None,
+        funcao_principal=funcao,
     )
     try:
         db.session.add(membro)
@@ -3088,7 +3424,7 @@ def cadastrar_membro():
 
 
 @app.route("/api/membros/<int:id>", methods=["PUT"])
-@admin_required
+@primary_admin_required
 def editar_membro(id):
     membro = db.session.get(Usuario, id)
     if not membro or membro.tipo_usuario.lower() != "membro":
@@ -3098,17 +3434,21 @@ def editar_membro(id):
     nome = _texto(dados, "nome")
     sobrenome = _texto(dados, "sobrenome")
     email = _texto(dados, "email").lower()
-    funcao = _texto(dados, "funcao_principal")
+    funcao = _funcao_principal_valida(dados.get("funcao_principal"))
     senha = _texto(dados, "senha")
 
     if not nome or not sobrenome or not email:
         return jsonify({
             "erro": "Nome, sobrenome e e-mail são obrigatórios."
         }), 400
+    if funcao is None and "funcao_principal" in dados and _texto(dados, "funcao_principal"):
+        return jsonify({
+            "erro": "Informe uma função válida para o membro. A função de administrador não é permitida."
+        }), 400
     if (
         len(nome) > 100
         or len(sobrenome) > 100
-        or len(funcao) > 100
+        or (funcao is not None and len(funcao) > 100)
         or not _email_valido(email)
     ):
         return jsonify({
@@ -3128,7 +3468,7 @@ def editar_membro(id):
     membro.nome = nome
     membro.sobrenome = sobrenome
     membro.email = email
-    membro.funcao_principal = funcao or None
+    membro.funcao_principal = funcao
     if senha:
         membro.senha = generate_password_hash(senha)
 
@@ -3146,7 +3486,7 @@ def editar_membro(id):
 
 
 @app.route("/api/membros/<int:id>", methods=["DELETE"])
-@admin_required
+@primary_admin_required
 def remover_membro(id):
     membro = db.session.get(Usuario, id)
     if not membro or membro.tipo_usuario.lower() != "membro":
@@ -3260,7 +3600,7 @@ def listar_notificacoes():
 
 
 @app.route("/api/avisos", methods=["POST"])
-@admin_required
+@primary_admin_required
 def publicar_aviso():
     dados = request.get_json(silent=True) or {}
     titulo = _texto(dados, "titulo")
@@ -3324,7 +3664,7 @@ def marcar_notificacoes_lidas():
 
 @app.route("/api/eventos", methods=["POST"])
 @app.route("/api/agenda", methods=["POST"])
-@admin_required
+@primary_admin_required
 def criar_culto():
     dados = request.get_json(silent=True) or {}
     titulo = _texto(dados, "titulo")
@@ -3425,7 +3765,7 @@ def _atualizar_vinculos_culto(culto_id, dados, membros=None):
 
 @app.route("/api/eventos/<int:id>", methods=["PUT"])
 @app.route("/api/agenda/<int:id>", methods=["PUT"])
-@admin_required
+@primary_admin_required
 def editar_culto(id):
     culto = db.session.get(Culto, id)
     dados = request.get_json(silent=True) or {}
@@ -3581,7 +3921,7 @@ def listar_louvores_evento(id):
 
 @app.route("/api/eventos/<int:id>/louvores", methods=["POST"])
 @app.route("/api/agenda/<int:id>/louvores", methods=["POST"])
-@admin_required
+@primary_admin_required
 def adicionar_louvor_evento(id):
     culto = db.session.get(Culto, id)
     if not culto:
@@ -3643,7 +3983,7 @@ def adicionar_louvor_evento(id):
 
 @app.route("/api/eventos/<int:evento_id>/louvores/<int:louvor_id>", methods=["PUT"])
 @app.route("/api/agenda/<int:evento_id>/louvores/<int:louvor_id>", methods=["PUT"])
-@admin_required
+@primary_admin_required
 def editar_louvor_evento(evento_id, louvor_id):
     culto = db.session.get(Culto, evento_id)
     vinculo = CultoLouvor.query.filter_by(
@@ -3700,7 +4040,7 @@ def editar_louvor_evento(evento_id, louvor_id):
 
 @app.route("/api/eventos/<int:evento_id>/louvores/<int:louvor_id>", methods=["DELETE"])
 @app.route("/api/agenda/<int:evento_id>/louvores/<int:louvor_id>", methods=["DELETE"])
-@admin_required
+@primary_admin_required
 def remover_louvor_evento(evento_id, louvor_id):
     culto = db.session.get(Culto, evento_id)
     vinculo = CultoLouvor.query.filter_by(
@@ -3845,7 +4185,7 @@ def listar_escalas_membro(usuario_id):
 
 @app.route("/api/eventos/<int:id>/escala", methods=["POST"])
 @app.route("/api/agenda/<int:id>/escala", methods=["POST"])
-@admin_required
+@primary_admin_required
 def cadastrar_membro_escala(id):
     culto = db.session.get(Culto, id)
     if not culto:
@@ -3899,7 +4239,7 @@ def cadastrar_membro_escala(id):
     "/api/agenda/<int:evento_id>/escala/<int:usuario_id>",
     methods=["PUT"],
 )
-@admin_required
+@primary_admin_required
 def editar_funcao_escala(evento_id, usuario_id):
     culto = db.session.get(Culto, evento_id)
     if not culto:
@@ -3954,7 +4294,7 @@ def editar_funcao_escala(evento_id, usuario_id):
     "/api/agenda/<int:evento_id>/escala/<int:usuario_id>",
     methods=["DELETE"],
 )
-@admin_required
+@primary_admin_required
 def remover_membro_escala(evento_id, usuario_id):
     culto = db.session.get(Culto, evento_id)
     if not culto:
@@ -3986,7 +4326,7 @@ def remover_membro_escala(evento_id, usuario_id):
 
 @app.route("/api/eventos/<int:id>/publicar", methods=["POST"])
 @app.route("/api/agenda/<int:id>/publicar", methods=["POST"])
-@admin_required
+@primary_admin_required
 def publicar_culto(id):
     culto = db.session.get(Culto, id)
     if not culto:
@@ -4195,7 +4535,7 @@ def listar_opcoes_troca(id):
 
 @app.route("/api/eventos/<int:id>", methods=["DELETE"])
 @app.route("/api/agenda/<int:id>", methods=["DELETE"])
-@admin_required
+@primary_admin_required
 def excluir_culto(id):
     culto = db.session.get(Culto, id)
     if not culto:
@@ -4233,6 +4573,6 @@ if __name__ == "__main__":
 
     app.run(
         debug=os.getenv("FLASK_DEBUG", "false").lower() == "true",
-        host="127.0.0.1",
-        port=5000
+        host=os.getenv("FLASK_RUN_HOST", "0.0.0.0"),
+        port=int(os.getenv("FLASK_RUN_PORT", os.getenv("PORT", "5000"))),
     )

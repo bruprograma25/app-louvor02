@@ -4,8 +4,8 @@
 
 .pagina-login {
   min-height: 100vh;
-  background: #080a0d;
-  color: white;
+  background: linear-gradient(135deg, #fff8f8 0%, #fff2f3 48%, #ffe9eb 100%);
+  color: #2d1317;
   position: relative;
   overflow: hidden;
   font-family: Arial, sans-serif;
@@ -21,11 +21,12 @@
   position: fixed;
   width: 600px;
   height: 900px;
-  background: #d90012;
+  background: linear-gradient(180deg, rgba(199, 18, 32, 0.9), rgba(129, 0, 16, 0.82));
   right: -250px;
   top: -100px;
   border-radius: 50%;
-  opacity: 0.85;
+  opacity: 0.9;
+  box-shadow: 0 28px 56px rgba(168, 17, 26, 0.22);
 }
 
 /* Container */
@@ -50,18 +51,19 @@
   width: 145px;
   height: 145px;
   border-radius: 50%;
-  background: #e50918;
-  border: 1px solid #ff3945;
+  background: linear-gradient(180deg, #d31423, #a10e18);
+  border: 1px solid rgba(255, 248, 248, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 40px rgba(255, 0, 0, 0.3);
+  box-shadow: 0 10px 40px rgba(194, 20, 35, 0.28);
 }
 
 .logo-circulo img {
   width: 105px;
   height: 105px;
-  object-fit: contain;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 /* Cabeçalho */
@@ -83,7 +85,7 @@
 }
 
 .cabecalho-login p {
-  color: #c5c5c5;
+  color: #5b4548;
   font-size: 20px;
   line-height: 1.5;
 }
@@ -110,9 +112,9 @@
 .input-login {
   height: 70px;
   width: 100%;
-  border: 1px solid #3d4148;
+  border: 1px solid #e8c7cd;
   border-radius: 17px;
-  background: #12151a;
+  background: #ffffff;
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -135,12 +137,12 @@
   border: none;
   outline: none;
   background: transparent;
-  color: white;
+  color: #2c1215;
   font-size: 18px;
 }
 
 .input-login input::placeholder {
-  color: #888b91;
+  color: #8d7073;
 }
 
 .mostrar-senha {
@@ -267,9 +269,18 @@
 }
 
 .login-logo {
-  text-align: center;
-  font-size: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 12px;
+}
+
+.login-logo img {
+  width: 108px;
+  height: 108px;
+  object-fit: cover;
+  border-radius: 28px;
+  box-shadow: 0 12px 30px rgba(194, 20, 35, 0.2);
 }
 
 .login-card h1,

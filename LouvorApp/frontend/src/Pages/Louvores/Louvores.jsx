@@ -133,6 +133,40 @@ function Louvores() {
   // NOVO LOUVOR
   // =====================================================
 
+  async function importarLouvorPorUrl() {
+    const url = window.prompt(
+      "Cole a URL do YouTube, Spotify, Cifra Club ou outra fonte pública da música:",
+      ""
+    );
+
+    if (!url || !url.trim()) {
+      return;
+    }
+
+    try {
+      const resposta = await apiFetch("/api/louvores/importar-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+
+      const dados = await resposta.json();
+      if (!resposta.ok) {
+        throw new Error(dados.erro || "Não foi possível importar a música.");
+      }
+
+      alert(dados.mensagem || "Música importada com sucesso.");
+      await carregarLouvores();
+      if (dados.louvor?.id) {
+        detalhesLouvor(dados.louvor.id);
+      }
+    } catch (erro) {
+      console.error("Erro ao importar música por URL:", erro);
+      alert(erro.message || "Erro ao importar música.");
+    }
+  }
+
+
   function novoLouvor() {
 
     window.location.href =
@@ -302,6 +336,13 @@ function Louvores() {
 
           </button>
 
+
+          <button
+            className="secondary-button"
+            onClick={importarLouvorPorUrl}
+          >
+            ⤴ Importar da web
+          </button>
 
           <button
             className="add-button"

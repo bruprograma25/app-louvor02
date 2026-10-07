@@ -6,6 +6,6 @@ from app import app
 if __name__ == "__main__":
     app.run(
         debug=os.getenv("FLASK_DEBUG", "false").lower() == "true",
-        host="127.0.0.1",
-        port=5000
+        host=os.getenv("FLASK_RUN_HOST", "0.0.0.0"),
+        port=int(os.getenv("FLASK_RUN_PORT", os.getenv("PORT", "5000"))),
     )

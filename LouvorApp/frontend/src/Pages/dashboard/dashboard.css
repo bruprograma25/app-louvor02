@@ -2,7 +2,7 @@
 .dashboard {
   min-height: 100vh;
   display: flex;
-  background: #0b1020;
+  background: linear-gradient(180deg, #fffaf9 0%, #fff2f4 100%);
 }
 
 /* SIDEBAR */
@@ -11,8 +11,8 @@
   width: 250px;
   min-height: 100vh;
   padding: 25px 18px;
-  background: #11182b;
-  border-right: 1px solid #222c45;
+  background: linear-gradient(180deg, #fff 0%, #fff3f4 100%);
+  border-right: 1px solid #f0d2d6;
 }
 
 .logo-area {
@@ -35,7 +35,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6d5dfc;
+  background: linear-gradient(135deg, #cf1b2f, #8d0e1a);
   font-size: 22px;
   font-weight: bold;
 }
@@ -52,7 +52,7 @@
   border-radius: 10px;
   padding: 13px 15px;
   background: transparent;
-  color: #aeb8d0;
+  color: #713b40;
   text-align: left;
   font-size: 15px;
   cursor: pointer;
@@ -60,8 +60,8 @@
 
 .menu-item:hover,
 .menu-item.active {
-  background: #1d2741;
-  color: #ffffff;
+  background: #fff1f2;
+  color: #c21423;
 }
 
 /* CONTEÚDO */
@@ -77,26 +77,42 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #222c45;
-  background: #0f1628;
+  border-bottom: 1px solid #efd4d8;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .welcome {
   margin: 0 0 5px;
-  color: #8f9bb7;
+  color: #805d60;
   font-size: 13px;
 }
 
 .topbar h2 {
   margin: 0;
   font-size: 24px;
+  color: #2d1215;
 }
 
 .user-area {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #cbd3e5;
+  color: #4f2d30;
+}
+
+.user-avatar-upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.user-avatar-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .user-avatar {
@@ -106,8 +122,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6d5dfc;
+  background: linear-gradient(135deg, #d6152d, #8d0e1a);
   font-weight: bold;
+  color: #fff;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.7);
 }
 
 /* ÁREA PRINCIPAL */
@@ -155,9 +174,9 @@
 .quick-add {
   margin: 0 0 28px;
   padding: 20px;
-  border: 1px solid #2d3854;
+  border: 1px solid #f1d0d5;
   border-radius: 14px;
-  background: #10172a;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .quick-add h3 {
@@ -198,12 +217,13 @@
 
 .card {
   padding: 22px;
-  border: 1px solid #222c45;
+  border: 1px solid #f0d4d9;
   border-radius: 15px;
-  background: #11182b;
+  background: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
   gap: 18px;
+  box-shadow: 0 10px 26px rgba(194, 20, 35, 0.05);
 }
 
 .card-button {
@@ -227,7 +247,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1d2741;
+  background: linear-gradient(135deg, #fff1f2, #fee1e5);
+  color: #b51322;
   font-size: 22px;
 }
 

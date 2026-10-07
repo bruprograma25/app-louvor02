@@ -6,18 +6,18 @@
   font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
   color: var(--app-text);
   background: var(--app-bg);
-  color-scheme: dark;
-  --app-bg: #0b1020;
-  --app-surface: #11182b;
-  --app-surface-raised: #19233b;
-  --app-border: #27334d;
-  --app-text: #f8fafc;
-  --app-muted: #b7c2d9;
-  --app-accent: #6d5dfc;
-  --app-accent-hover: #5b4be8;
-  --app-success: #4ade80;
-  --app-warning: #fbbf24;
-  --app-danger: #f87171;
+  color-scheme: light;
+  --app-bg: #fff8f8;
+  --app-surface: #ffffff;
+  --app-surface-raised: #fff1f2;
+  --app-border: #f1c6cc;
+  --app-text: #2c1215;
+  --app-muted: #6d4b4d;
+  --app-accent: #c21423;
+  --app-accent-hover: #99141d;
+  --app-success: #1f9d5a;
+  --app-warning: #d97706;
+  --app-danger: #dc2626;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -38,7 +38,7 @@ html {
 
 body {
   margin: 0;
-  background: var(--app-bg);
+  background: linear-gradient(180deg, #fffaf9 0%, #fff6f7 100%);
   color: var(--app-text);
   line-height: 1.5;
 }
@@ -68,7 +68,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #9f91ff;
+  outline: 3px solid rgba(194, 20, 35, 0.35);
   outline-offset: 3px;
 }
 

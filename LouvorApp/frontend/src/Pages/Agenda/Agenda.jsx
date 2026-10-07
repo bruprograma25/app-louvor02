@@ -234,10 +234,10 @@ function Agenda() {
       <header className="agenda-header">
         <div>
           <span>Agenda</span>
-          <h1>Agenda de cultos e eventos</h1>
+          <h1>Agenda de ministérios, cultos e eventos</h1>
           <p>
             {ehAdmin
-              ? "Monte, publique e gerencie as escalas."
+              ? "Monte, publique e gerencie escalas de ministério, louvores e reuniões."
               : "Veja sua agenda individual publicada."}
           </p>
         </div>

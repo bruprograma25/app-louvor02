@@ -32,6 +32,7 @@ from app import (  # noqa: E402
     limiter,
     _criar_token,
     _configurar_url_banco,
+    check_password_hash,
     generate_password_hash,
     jwt,
 )
@@ -52,14 +53,16 @@ class ApiRegressionTests(unittest.TestCase):
     def setUp(self):
         app.config.update(TESTING=True, RATELIMIT_ENABLED=False)
         limiter.enabled = False
+        app.DEFAULT_ADMIN_EMAIL = "admin3@igreja.com"
+        app.DEFAULT_ADMIN_PASSWORD = "123456"
         with app.app_context():
             db.drop_all()
             db.create_all()
             administrador = Usuario(
                 nome="Admin",
                 sobrenome="Teste",
-                email="admin@example.invalid",
-                senha=generate_password_hash("admin-password-123"),
+                email="admin3@igreja.com",
+                senha=generate_password_hash("123456"),
                 tipo_usuario="admin",
             )
             db.session.add(administrador)
@@ -125,8 +128,29 @@ class ApiRegressionTests(unittest.TestCase):
         with app.app_context():
             db.session.remove()
 
-    def test_every_api_route_requires_jwt_except_signup_and_login(self):
-        public_posts = {("/api/cadastro", "POST"), ("/api/login", "POST")}
+    def test_garante_admin_padrao_quando_banco_esta_vazio(self):
+        with app.app_context():
+            db.session.query(Usuario).delete()
+            db.session.commit()
+
+            from app import garantir_admin_padrao
+            garantir_admin_padrao()
+
+            usuario = db.session.query(Usuario).filter_by(
+                email="admin3@igreja.com"
+            ).first()
+
+            self.assertIsNotNone(usuario)
+            self.assertEqual(usuario.tipo_usuario, "admin")
+            self.assertTrue(check_password_hash(usuario.senha, "123456"))
+
+    def test_every_api_route_requires_jwt_except_signup_login_and_health(self):
+        public_routes = {
+            ("/api/cadastro", "POST"),
+            ("/api/login", "POST"),
+            ("/api/reunioes/status", "GET"),
+            ("/api/healthz", "GET"),
+        }
         for rule in app.url_map.iter_rules():
             if not rule.rule.startswith("/api/"):
                 continue
@@ -138,10 +162,36 @@ class ApiRegressionTests(unittest.TestCase):
             for method in rule.methods - {"OPTIONS", "HEAD"}:
                 with self.subTest(method=method, path=path):
                     resposta = self.client.open(path, method=method)
-                    if (path, method) in public_posts:
-                        self.assertEqual(resposta.status_code, 400)
+                    if (path, method) in public_routes:
+                        self.assertIn(resposta.status_code, {200, 400, 405})
                     else:
                         self.assertEqual(resposta.status_code, 401)
+
+    def test_usuario_pode_atualizar_foto_perfil(self):
+        resposta = self.client.post(
+            "/api/login",
+            json={
+                "email": "admin3@igreja.com",
+                "senha": "123456",
+            },
+        )
+        self.assertEqual(resposta.status_code, 200, resposta.get_json())
+
+        token = resposta.get_json()["token"]
+        foto = "data:image/png;base64,AAAA"
+
+        atualizacao = self.client.post(
+            "/api/usuario/foto",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"foto_perfil": foto},
+        )
+
+        self.assertEqual(atualizacao.status_code, 200, atualizacao.get_json())
+        self.assertEqual(atualizacao.get_json()["usuario"]["foto_perfil"], foto)
+
+        with app.app_context():
+            usuario = db.session.get(Usuario, self.admin_id)
+            self.assertEqual(usuario.foto_perfil, foto)
 
     def test_invalid_expired_and_demoted_user_tokens_are_rejected(self):
         for token in ("invalid-token", "Bearer"):
@@ -157,6 +207,7 @@ class ApiRegressionTests(unittest.TestCase):
                 "iss": "louvorapp",
                 "iat": 1,
                 "exp": 2,
+                "session_version": 20261006,
             },
             os.environ["JWT_SECRET_KEY"],
             algorithm="HS256",
@@ -165,6 +216,24 @@ class ApiRegressionTests(unittest.TestCase):
             self.client.get(
                 "/api/louvores",
                 headers={"Authorization": f"Bearer {expired}"},
+            ).status_code,
+            401,
+        )
+
+        legacy = jwt.encode(
+            {
+                "sub": str(self.admin_id),
+                "iss": "louvorapp",
+                "iat": 1,
+                "exp": 9999999999,
+            },
+            os.environ["JWT_SECRET_KEY"],
+            algorithm="HS256",
+        )
+        self.assertEqual(
+            self.client.get(
+                "/api/louvores",
+                headers={"Authorization": f"Bearer {legacy}"},
             ).status_code,
             401,
         )
@@ -298,6 +367,16 @@ class ApiRegressionTests(unittest.TestCase):
             )
             if key:
                 self.assertNotIn(key, response.get_data(as_text=True))
+
+    def test_musical_assistant_accepts_openai_key_alias(self):
+        with patch.dict(os.environ, {"AI_API_KEY": "", "OPENAI_API_KEY": "provider-key"}, clear=False):
+            response = self.client.get(
+                "/api/ia-musical/status",
+                headers=self.admin_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["provedor_configurado"])
+        self.assertNotIn("provider-key", response.get_data(as_text=True))
 
     def test_musical_assistant_local_answers_music_topics_without_catalog_matches(self):
         questions = {
@@ -514,6 +593,17 @@ class ApiRegressionTests(unittest.TestCase):
         self.assertTrue(claims["sub"].startswith(f"usuario-{member_id}-"))
         self.assertGreater(claims["exp"] - claims["iat"], 3 * 60 * 60)
         self.assertLessEqual(claims["exp"] - claims["iat"], 4 * 60 * 60 + 10)
+
+    def test_status_service_is_public_for_health_checks(self):
+        with patch.dict(os.environ, {
+            "LIVEKIT_URL": "wss://example.livekit.cloud",
+            "LIVEKIT_API_KEY": "test-api-key",
+            "LIVEKIT_API_SECRET": "livekit-private-signing-secret-for-tests",
+        }):
+            response = self.client.get("/api/reunioes/status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"disponivel": True})
 
     def test_livekit_tokens_reject_invalid_rooms_and_insecure_production_urls(self):
         invalid_rooms = ("", "ab", "has space", "../private", "x" * 65)
@@ -795,51 +885,31 @@ class ApiRegressionTests(unittest.TestCase):
         chamada.assert_not_called()
 
     def test_song_folders_are_private_and_available_for_event_selection(self):
-        member_a_id = self._cadastrar_membro("Ana", "ana-folder@example.invalid")
-        member_b_id = self._cadastrar_membro("Bia", "bia-folder@example.invalid")
-        member_a = self._login("ana-folder@example.invalid", "member-password-123")
-        member_b = self._login("bia-folder@example.invalid", "member-password-123")
+        self._cadastrar_membro("Ana", "ana-folder@example.invalid")
+        member = self._login("ana-folder@example.invalid", "member-password-123")
+        self.assertEqual(
+            self.client.post(
+                "/api/louvores",
+                headers=member,
+                json={"titulo": "Louvor Privado da Ana", "tom": "A"},
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get("/api/louvores", headers=member).status_code,
+            200,
+        )
 
         song_a = self.client.post(
             "/api/louvores",
-            headers=member_a,
-            json={"titulo": "Louvor Privado da Ana", "tom": "A"},
+            headers=self.admin_headers,
+            json={"titulo": "Louvor do Admin", "tom": "A"},
         ).get_json()["louvor"]
         song_b = self.client.post(
             "/api/louvores",
-            headers=member_b,
-            json={"titulo": "Louvor Privado da Bia", "tom": "E"},
-        ).get_json()["louvor"]
-
-        self.assertEqual(song_a["dono_id"], member_a_id)
-        self.assertEqual(song_b["dono_id"], member_b_id)
-        self.assertEqual(
-            [item["id"] for item in self.client.get(
-                "/api/louvores", headers=member_a
-            ).get_json()],
-            [song_a["id"]],
-        )
-        todas_pastas = self.client.get(
-            "/api/louvores",
             headers=self.admin_headers,
-        ).get_json()
-        pastas_por_id = {item["id"]: item["dono_nome"] for item in todas_pastas}
-        self.assertEqual(pastas_por_id[song_a["id"]], "Ana Membro")
-        self.assertEqual(pastas_por_id[song_b["id"]], "Bia Membro")
-        self.assertEqual(
-            self.client.get(
-                f"/api/louvores/{song_b['id']}",
-                headers=member_a,
-            ).status_code,
-            404,
-        )
-        self.assertEqual(
-            self.client.get(
-                f"/api/louvores/{song_a['id']}",
-                headers=self.admin_headers,
-            ).status_code,
-            200,
-        )
+            json={"titulo": "Outro Louvor do Admin", "tom": "E"},
+        ).get_json()["louvor"]
 
         event_id = self._criar_evento(louvores=[song_b["id"]])
         with app.app_context():
@@ -849,13 +919,22 @@ class ApiRegressionTests(unittest.TestCase):
             ).first()
             self.assertIsNotNone(vinculo)
 
+        self.assertEqual(
+            self.client.get(f"/api/louvores/{song_a['id']}", headers=member).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(f"/api/louvores/{song_a['id']}", headers=self.admin_headers).status_code,
+            200,
+        )
+
         with patch.dict(os.environ, {"AI_API_KEY": ""}):
             assistant_response = self.client.post(
                 "/api/ia-musical/conversar",
-                headers=member_a,
+                headers=member,
                 json={"mensagens": [{
                     "role": "user",
-                    "content": "Qual o tom do louvor Louvor Privado da Bia?",
+                    "content": "Qual o tom do louvor Outro Louvor do Admin?",
                 }]},
             )
         self.assertEqual(assistant_response.status_code, 200)
@@ -1172,11 +1251,13 @@ class ApiRegressionTests(unittest.TestCase):
                 "email": "ANA@example.invalid",
                 "senha": "member-password-123",
                 "confirmarSenha": "member-password-123",
+                "funcao_principal": "Ministro",
                 "tipo_usuario": "admin",
             },
         )
         self.assertEqual(resposta.status_code, 201)
         self.assertEqual(resposta.get_json()["usuario"]["tipo_usuario"], "membro")
+        self.assertEqual(resposta.get_json()["usuario"]["funcao_principal"], "Ministro")
         self.assertNotIn("senha", resposta.get_json()["usuario"])
         self.assertEqual(
             self.client.post(
@@ -1186,9 +1267,23 @@ class ApiRegressionTests(unittest.TestCase):
                     "sobrenome": "Membro",
                     "email": "ana@example.invalid",
                     "senha": "member-password-123",
+                    "funcao_principal": "Back vocal",
                 },
             ).status_code,
             409,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/cadastro",
+                json={
+                    "nome": "Pedro",
+                    "sobrenome": "Admin",
+                    "email": "pedro-admin@example.invalid",
+                    "senha": "member-password-123",
+                    "funcao_principal": "administrador",
+                },
+            ).status_code,
+            400,
         )
         self.assertEqual(
             self.client.post(
@@ -1217,27 +1312,36 @@ class ApiRegressionTests(unittest.TestCase):
             200,
         )
 
-    def test_members_can_manage_own_songs_but_not_other_folders_or_events(self):
+    def test_members_cannot_manage_songs_or_events(self):
         member_id = self._cadastrar_membro("Alice", "alice@example.invalid")
         member_headers = self._login(
             "alice@example.invalid", "member-password-123"
         )
-        song = self.client.post(
-            "/api/louvores",
-            json={"titulo": "Louvor criado por membro", "tom": "D"},
-            headers=member_headers,
+
+        self.assertEqual(
+            self.client.post(
+                "/api/louvores",
+                json={"titulo": "Louvor criado por membro", "tom": "D"},
+                headers=member_headers,
+            ).status_code,
+            403,
         )
-        self.assertEqual(song.status_code, 201, song.get_json())
-        song_id = song.get_json()["louvor"]["id"]
-        self._cadastrar_membro("Other", "other-member@example.invalid")
-        other_headers = self._login(
-            "other-member@example.invalid", "member-password-123"
+        self.assertEqual(
+            self.client.put(
+                "/api/louvores/1",
+                headers=member_headers,
+                json={"titulo": "Louvor atualizado por Alice"},
+            ).status_code,
+            403,
         )
-        other_song = self.client.post(
-            "/api/louvores",
-            json={"titulo": "Louvor de outra pasta"},
-            headers=other_headers,
-        ).get_json()["louvor"]
+        self.assertEqual(
+            self.client.delete(
+                "/api/louvores/1",
+                headers=member_headers,
+            ).status_code,
+            403,
+        )
+
         endpoints = (
             ("GET", "/api/agenda/membros", None),
             ("POST", "/api/membros", {}),
@@ -1263,35 +1367,6 @@ class ApiRegressionTests(unittest.TestCase):
                     headers=member_headers,
                 )
                 self.assertEqual(resposta.status_code, 403)
-
-        self.assertEqual(
-            self.client.put(
-                f"/api/louvores/{song_id}",
-                headers=member_headers,
-                json={"titulo": "Louvor atualizado por Alice"},
-            ).status_code,
-            200,
-        )
-        for method, body in (
-            ("GET", None),
-            ("PUT", {"titulo": "Tentativa de alteração"}),
-            ("DELETE", None),
-        ):
-            with self.subTest(method=method, foreign_song=other_song["id"]):
-                resposta = self.client.open(
-                    f"/api/louvores/{other_song['id']}",
-                    method=method,
-                    json=body,
-                    headers=member_headers,
-                )
-                self.assertEqual(resposta.status_code, 404)
-        self.assertEqual(
-            self.client.delete(
-                f"/api/louvores/{song_id}",
-                headers=member_headers,
-            ).status_code,
-            200,
-        )
 
     def test_song_validation_crud_and_password_privacy(self):
         member_id = self._cadastrar_membro("Bob", "bob@example.invalid")

@@ -82,9 +82,7 @@ function Login() {
             <div className="login-card">
 
                 <div className="login-logo">
-
-                    🎵
-
+                    <img src="/church-brand.svg" alt="Logo da igreja" />
                 </div>
 
                 <h1>
