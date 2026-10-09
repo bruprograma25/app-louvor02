@@ -15,6 +15,7 @@ const linksPrincipais = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/louvores", label: "Louvores", icon: Music2 },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
+  { href: "/ministerio", label: "Ministério", icon: CalendarDays },
   { href: "/equipe", label: "Equipe", icon: Users, adminOnly: true },
 ];
 
@@ -33,7 +34,7 @@ function AppNavigation() {
     (link) => !link.adminOnly || exibirEquipe
   );
   const linkAtivo =
-    caminho === "/minha-agenda" || caminho === "/montar-escala"
+    caminho === "/minha-agenda" || caminho === "/montar-escala" || caminho === "/ministerio"
       ? "/agenda"
       : caminho.startsWith("/detalhes-louvor") ||
           caminho === "/novo-louvor" ||
